@@ -108,6 +108,7 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
         <button type="submit" className="w-full p-2 text-white bg-blue-500 rounded hover:bg-blue-600">
           Add User
         </button>
+        
       </form>
 
       {/* Update user */}
