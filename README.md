@@ -5,6 +5,9 @@ npm install --save-dev @types/react
 npm install -g nodemon
 
 
+### To Run the stack, run the command:
+nodemon
+
 
 To run only front end: 
 npm run dev
