@@ -2,7 +2,6 @@ import { CgProfile } from "react-icons/cg";
 import { FaHome,FaRunning} from "react-icons/fa";
 import {useRouter} from 'next/router';
 import {useState} from 'react';
-
 const HomePage = () => {
 
 
@@ -48,6 +47,8 @@ const HomePage = () => {
             </div>
             <div className="flex-grow flex justify-center items-center">
                 Home Page
+            </div>
+            <div>
             </div>
         </div>
     );

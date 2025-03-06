@@ -1,5 +1,4 @@
 import React from 'react';
-import UserInterface from '../components/UserInterface';
 import HomePage from '@/pages/HomePage';
 const Home: React.FC = () => {
   return (
