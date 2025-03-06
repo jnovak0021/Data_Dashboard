@@ -1,5 +1,9 @@
 {
   "devDependencies": {
+    "@types/mapbox-gl": "^3.4.1",
     "@types/react": "^19.0.10"
+  },
+  "dependencies": {
+    "mapbox-gl": "^3.10.0"
   }
 }
