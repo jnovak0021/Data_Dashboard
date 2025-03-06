@@ -12,9 +12,9 @@ import (
 )
 
 type User struct {
-	Id       int    `json:"id"`
-	Name		 string `json:"name"`
-	Email    string `json:"email"`
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 // main function
@@ -99,7 +99,7 @@ func getUsers(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-//get user by id
+// get user by id
 func getUser(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -131,7 +131,7 @@ func createUser(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-//update user
+// update user
 func updateUser(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var u User
