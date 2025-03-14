@@ -2,9 +2,7 @@ import { CgProfile } from "react-icons/cg";
 import { FaHome,FaRunning} from "react-icons/fa";
 import {useRouter} from 'next/router';
 import {useState} from 'react';
-import Navbar from '@/components/Navbar'
-
-const HomePage = () => {
+const Navbar = () => {
 
 
     //router 
@@ -37,15 +35,16 @@ const HomePage = () => {
     }
 
     return (
-        <div className=" bg-background text w-full h-screen flex items-center flex-col p-0">
-            <Navbar />
-            <div className="flex-grow flex justify-center items-center">
-                Home Page
+        <div className=" navbar w-half bg-mainPink text-4xl font-bold text-white fixed text-4x1 flex top-0 h-16 justify-between items-center rounded-b-lg p-4">
+        {/* <div className=" navbar w-full bg-mainPink text-4xl font-bold text-white fixed text-4x1 flex top-0 h-16 justify-between items-center rounded-b-lg p-4 right-0  "> */}
+            <div className="flex space-x-4">
+                <FaHome onClick={handleHomeClick} className="cursor-pointer"/>
+                <FaRunning onClick={handleMapClick} className="cursor-pointer"/>
+                <CgProfile onClick={handleProfileClick} className="cursor-pointer"/>
             </div>
-            <div>
-            </div>
+
         </div>
     );
 }
 
-export default HomePage;
+export default Navbar;
