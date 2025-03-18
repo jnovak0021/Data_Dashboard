@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { saveUserSession } from "../../utils/auth";
 
 export default function Login({ setIsLoggedIn, setUser }: { setIsLoggedIn: React.Dispatch<React.SetStateAction<boolean>>; setUser: React.Dispatch<React.SetStateAction<string | null>> }) {
    const [email, setEmail] = useState("");
@@ -26,7 +27,16 @@ export default function Login({ setIsLoggedIn, setUser }: { setIsLoggedIn: React
 
             if (response.ok) {
                console.log("Login successful, user email:", data.email); // Log user email
-               setUser(data.email); // Set user email (instead of userId)
+               
+               // Save user session to localStorage
+               saveUserSession({
+                  email: data.email,
+                  id: data.id,
+                  name: data.name || '',
+                  isLoggedIn: true
+               });
+               
+               setUser(data.email); // Set user email in state
                setIsLoggedIn(true); // Mark user as logged in
             } else {
                console.log("Login failed with message:", data.error); // Debugging failure case
