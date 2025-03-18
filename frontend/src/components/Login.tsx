@@ -14,8 +14,7 @@ export default function Login({ setIsLoggedIn, setUser }: { setIsLoggedIn: React
 
       try {
          
-         const response = await fetch("https://earthquake-globe-web-backend.fly.dev/api/go/login", {
-         //const response = await fetch("http://localhost:8080/api/go/login", {
+        const response = await fetch("http://localhost:8080/api/go/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),

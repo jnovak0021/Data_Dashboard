@@ -26,23 +26,28 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
+	log.Println("Connected")
 
 	// create table if not exists
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT, password TEXT)")
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("Created USERS")
 
 	//create apis table
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS APIs (APIId SERIAL PRIMARY KEY, UserId INT NOT NULL, APIString TEXT, APIKey TEXT, PaneX INT, PaneY INT, CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE)")
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("APIs")
+
 	//create parameters table if doesnt exist
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS Parameters (ParamId SERIAL PRIMARY KEY, APIId INT NOT NULL, Parameter TEXT, CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE)")
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("Created Parameters")
 
 	/*
 		CREATE TABLE IF NOT EXISTS users (
