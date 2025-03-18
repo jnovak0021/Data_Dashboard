@@ -3,11 +3,13 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
@@ -19,8 +21,29 @@ type User struct {
 
 // main function
 func main() {
+	// Get environment variable access
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	//connect to database
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	dbURL := os.Getenv("DATABASE_URL")
+
+	fmt.Println("Trying to connect to:", dbURL)
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Connection error:", err)
+	}
+
+	// Test the connection
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Ping error:", err)
+	} else {
+		fmt.Println("Successfully connected to the database")
+	}
+
 	if err != nil {
 		log.Fatal(err)
 	}
