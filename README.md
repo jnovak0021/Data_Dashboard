@@ -18,3 +18,9 @@ npm run dev
 
 
 https://react-icons.github.io/react-icons/
+
+
+
+### Database
+- postgres
+- Host on fly.io

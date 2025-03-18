@@ -1,4 +1,8 @@
 import { CgProfile } from "react-icons/cg";
+// import { FaHome,FaRunning} from "react-icons/fa";
+// import {useRouter} from 'next/router';
+// import {useState} from 'react';
+// import Navbar from '@/components/Navbar'
 import { FaHome, FaRunning } from "react-icons/fa";
 import { useRouter } from 'next/router';
 import { useState, useEffect, useRef } from 'react';
@@ -53,6 +57,15 @@ const HomePage = () => {
     router.push("/" + pageIn);
   };
 
+    // const handleHomeClick = () => {
+    //     setPage("Home");
+    //     handleRoute({pageIn: "/"})
+    // }
+    
+    // const handleProfileClick = () => {
+    //     setPage("Profile");
+    //     handleRoute({ pageIn:  "Profile"});
+    // }
   // Carousel component with Mapbox
   const PhotoCarousel = ({ photos, coordinates, route }: { photos: string[], coordinates: [number, number], route: [number, number][] }) => {
     const [currentPhoto, setCurrentPhoto] = useState(0);
@@ -132,6 +145,12 @@ const HomePage = () => {
     }, [coordinates, route]);
 
     return (
+        // <div className=" bg-background text w-full h-screen flex items-center flex-col p-0">
+        //     <Navbar />
+        //     <div className="flex-grow flex justify-center items-center">
+        //         Home Page
+        //     </div>
+        //     <div>
       <div className="flex w-full max-w-[700px] mx-auto" style={{ marginLeft: '350px' }}>
         <div className="relative w-[300px] h-[350px] bg-gray-200 overflow-hidden">
           <img 

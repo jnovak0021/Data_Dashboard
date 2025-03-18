@@ -291,52 +291,56 @@ const Map: React.FC = () => {
   };
   
   return (
-    <div className="walk-tracker">
-      <div 
-        ref={mapContainer} 
-        className="map-container" 
-        style={{ width: '100%', height: '400px' }}
-      />
-      
-      {error && (
-        <div className="error-message">
-          {error}
-        </div>
-      )}
-      
-      <div className="stats-container">
-        <div className="stat">
-          <h3>Distance</h3>
-          <p>{formatDistance(stats.distance)}</p>
-        </div>
-        <div className="stat">
-          <h3>Duration</h3>
-          <p>{formatDuration(stats.duration)}</p>
-        </div>
-        <div className="stat">
-          <h3>Pace</h3>
-          <p>{formatPace(stats.pace)} min/km</p>
-        </div>
-      </div>
-      
-      <div className="controls">
-        {!isTracking ? (
-          <button 
-            className="start-button"
-            onClick={startWalk}
-          >
-            Start Walk
-          </button>
-        ) : (
-          <button 
-            className="stop-button"
-            onClick={stopWalk}
-          >
-            Stop Walk
-          </button>
+    <>
+    
+        <div className="walk-tracker">
+
+        <div 
+            ref={mapContainer} 
+            className="map-container" 
+            style={{ width: '100%', height: '400px' }}
+        />
+        
+        {error && (
+            <div className="error-message">
+            {error}
+            </div>
         )}
-      </div>
-    </div>
+        
+        <div className="stats-container">
+            <div className="stat">
+            <h3>Distance</h3>
+            <p>{formatDistance(stats.distance)}</p>
+            </div>
+            <div className="stat">
+            <h3>Duration</h3>
+            <p>{formatDuration(stats.duration)}</p>
+            </div>
+            <div className="stat">
+            <h3>Pace</h3>
+            <p>{formatPace(stats.pace)} min/km</p>
+            </div>
+        </div>
+        
+        <div className="controls">
+            {!isTracking ? (
+            <button 
+                className="start-button"
+                onClick={startWalk}
+            >
+                Start Walk
+            </button>
+            ) : (
+            <button 
+                className="stop-button"
+                onClick={stopWalk}
+            >
+                Stop Walk
+            </button>
+            )}
+        </div>
+        </div>
+    </>
   );
 };
 
