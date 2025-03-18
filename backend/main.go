@@ -12,9 +12,10 @@ import (
 )
 
 type User struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Id       int    `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password,omitempty"`
 }
 
 // main function
@@ -27,10 +28,47 @@ func main() {
 	defer db.Close()
 
 	// create table if not exists
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT, password TEXT)")
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	//create apis table
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS APIs (APIId SERIAL PRIMARY KEY, UserId INT NOT NULL, APIString TEXT, APIKey TEXT, PaneX INT, PaneY INT, CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE)")
+	if err != nil {
+		log.Fatal(err)
+	}
+	//create parameters table if doesnt exist
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS Parameters (ParamId SERIAL PRIMARY KEY, APIId INT NOT NULL, Parameter TEXT, CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE)")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	/*
+		CREATE TABLE IF NOT EXISTS users (
+		    id SERIAL PRIMARY KEY,
+		    name TEXT,
+		    email TEXT UNIQUE,
+		    password TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS APIs (  -- Renamed table from "API" to "APIs" (Avoids reserved keyword issues)
+		    APIId SERIAL PRIMARY KEY,
+		    UserId INT NOT NULL,
+		    APIString TEXT,
+		    APIKey TEXT,
+		    PaneX INT,
+		    PaneY INT,
+		    CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE
+		);
+
+		CREATE TABLE IF NOT EXISTS Parameters (
+		    ParamId SERIAL PRIMARY KEY,
+		    APIId INT NOT NULL,
+		    Parameter TEXT,  -- Fixed typo (was "Paramter")
+		    CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE
+		);
+	*/
 
 	// create router
 	router := mux.NewRouter()
