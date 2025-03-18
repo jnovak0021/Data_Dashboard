@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useState } from 'react';
 import Globe from '@/components/Dashboard';
 
+
 const HomePage = () => {
   const router = useRouter();
   const [page, setPage] = useState("Home");
@@ -30,6 +31,7 @@ const HomePage = () => {
   const handleRoute = ({ pageIn }: HandleRouteProps) => {
     router.push("/" + pageIn);
   };
+
 
   return (
     <div className="bg-background text-black w-screen h-screen flex flex-col overflow-hidden">

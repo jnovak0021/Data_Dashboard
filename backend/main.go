@@ -3,11 +3,13 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
@@ -20,8 +22,29 @@ type User struct {
 
 // main function
 func main() {
+	// Get environment variable access
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	//connect to database
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	dbURL := os.Getenv("DATABASE_URL")
+
+	fmt.Println("Trying to connect to:", dbURL)
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Connection error:", err)
+	}
+
+	// Test the connection
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Ping error:", err)
+	} else {
+		fmt.Println("Successfully connected to the database")
+	}
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -82,6 +105,7 @@ func main() {
 	router.HandleFunc("/api/go/users/{id}", getUser(db)).Methods("GET")
 	router.HandleFunc("/api/go/users/{id}", updateUser(db)).Methods("PUT")
 	router.HandleFunc("/api/go/users/{id}", deleteUser(db)).Methods("DELETE")
+	router.HandleFunc("/api/go/login", loginUser(db)).Methods("POST") // User login
 
 	// wrap the router with CORS and JSON content type middlewares
 	enhancedRouter := enableCORS(jsonContentTypeMiddleware(router))
@@ -129,7 +153,7 @@ func getUsers(db *sql.DB) http.HandlerFunc {
 		users := []User{} // array of users
 		for rows.Next() {
 			var u User
-			if err := rows.Scan(&u.Id, &u.Name, &u.Email); err != nil {
+			if err := rows.Scan(&u.Id, &u.Name, &u.Email, &u.Password); err != nil {
 				log.Fatal(err)
 			}
 			users = append(users, u)
@@ -149,7 +173,7 @@ func getUser(db *sql.DB) http.HandlerFunc {
 		id := vars["id"]
 
 		var u User
-		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email)
+		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email, &u.Password)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -159,16 +183,26 @@ func getUser(db *sql.DB) http.HandlerFunc {
 	}
 }
 
+/*
+type User struct {
+	Id       int    `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password,omitempty"`
+}
+*/
+
 // create user
 func createUser(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var u User
 		json.NewDecoder(r.Body).Decode(&u)
 
-		err := db.QueryRow("INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id", u.Name, u.Email).Scan(&u.Id)
+		err := db.QueryRow("INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", u.Name, u.Email, u.Password).Scan(&u.Id)
 		if err != nil {
 			log.Fatal(err)
 		}
+		log.Println("INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id", u.Name, u.Email, u.Password)
 
 		json.NewEncoder(w).Encode(u)
 	}
@@ -222,5 +256,37 @@ func deleteUser(db *sql.DB) http.HandlerFunc {
 
 			json.NewEncoder(w).Encode("User deleted")
 		}
+	}
+
+}
+
+func loginUser(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input User
+		json.NewDecoder(r.Body).Decode(&input)
+
+		var storedUser User
+		err := db.QueryRow("SELECT id, name, email, password FROM users WHERE email = $1", input.Email).
+			Scan(&storedUser.Id, &storedUser.Name, &storedUser.Email, &storedUser.Password)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid email or password"})
+			return
+		}
+
+		// // Compare hashed password with provided password
+		// err = bcrypt.CompareHashAndPassword([]byte(storedUser.Password), []byte(input.Password))
+		// if err != nil {
+		// 	w.Header().Set("Content-Type", "application/json")
+		// 	w.WriteHeader(http.StatusUnauthorized)
+		// 	json.NewEncoder(w).Encode(map[string]string{"error": "Invalid email or password"})
+		// 	return
+		// }
+
+		// Remove password from response
+		storedUser.Password = ""
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(storedUser)
 	}
 }

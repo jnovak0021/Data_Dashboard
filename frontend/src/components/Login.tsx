@@ -13,23 +13,29 @@ export default function Login({ setIsLoggedIn, setUser }: { setIsLoggedIn: React
       console.log("Login attempt with email:", email); // Debugging
 
       try {
-         
-        const response = await fetch("http://localhost:8080/api/go/login", {
+         const response = await fetch("http://localhost:8000/api/go/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),
          });
 
-         const data = await response.json();
-         console.log("Login response:", data); // Debugging the login response
+         const contentType = response.headers.get("Content-Type");
+         if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            console.log("Login response:", data); // Debugging the login response
 
-         if (response.ok) {
-            console.log("Login successful, user email:", data.email); // Log user email
-            setUser(data.email); // Set user email (instead of userId)
-            setIsLoggedIn(true); // Mark user as logged in
+            if (response.ok) {
+               console.log("Login successful, user email:", data.email); // Log user email
+               setUser(data.email); // Set user email (instead of userId)
+               setIsLoggedIn(true); // Mark user as logged in
+            } else {
+               console.log("Login failed with message:", data.error); // Debugging failure case
+               setErrorMessage(data.error || "Invalid email or password.");
+            }
          } else {
-            console.log("Login failed with message:", data.message); // Debugging failure case
-            setErrorMessage(data.message || "Invalid email or password.");
+            const text = await response.text();
+            console.error("Error during login:", text); // Debugging error
+            setErrorMessage("Something went wrong!");
          }
       } catch (error) {
          console.error("Error during login:", error); // Debugging error
@@ -47,11 +53,8 @@ export default function Login({ setIsLoggedIn, setUser }: { setIsLoggedIn: React
       }
 
       try {
-         //const response = await fetch("https://earthquake-globe-web-0wajea.fly.dev/api/go/users", {
-         const response = await fetch("http://localhost:8080/api/go/users", {
-
-            
-            method: "POST", // Same as login but POST for user creation
+         const response = await fetch("http://localhost:8000/api/go/users", {
+            method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, email, password }),
          });
