@@ -1,32 +1,107 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import DashboardPane from './DashboardPane';
 
+interface APIData {
+  apiId: number;
+  userId: number;
+  apiName: string;
+  apiString: string;
+  apiKey: string;
+  graphType: string;
+  paneX: number;
+  paneY: number;
+  parameters: (string | { parameter: string })[] | null;
+}
+
 interface DashboardProps {
-  // You could add props to customize the dashboard based on the selected one
   customLayout?: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ customLayout = false }) => {
-  const numberOfPanes = 6; // Reduced number of panes for better display
-  const paneWidth = 350; // Width of each pane in pixels
-  const paneHeight = 350; // Height of each pane in pixels
-  const queryString = 'https://www.airnowapi.org/aq/data/?startDate=2025-03-17T00&endDate=2025-03-17T23&parameters=O3,PM25,PM10&bbox=-124.409591,32.534156,-114.131211,36.778259&dataType=A&format=application/json&verbose=1&api_key=C854FD7C-A234-4088-83A5-04C0E93B7817';
-  const graphType = "pie";
-  const parameters = ['OZONE','PM2.5']
-  const parameters2 = ['PM2.5','OZONE','PM10']
+  const [apis, setApis] = useState<APIData[]>([]);
+  const [apiData, setApiData] = useState<{ apiId: number; data: any }[]>([]); // To store the fetched data for each API
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const panes = Array.from({ length: numberOfPanes }, (_, index) => (
-    <DashboardPane key={index} index={index} sizeX={paneWidth} sizeY={paneHeight} queryString={queryString} graphType={graphType} parameters={parameters} />
-  ));
-  
-  const panes2 = Array.from({ length: numberOfPanes }, (_, index) => (
-    <DashboardPane key={index} index={index} sizeX={paneWidth} sizeY={paneHeight} queryString={queryString} graphType={graphType} parameters={parameters2} />
-  ));
+  // Fetch the list of APIs
+  useEffect(() => {
+    const fetchAPIs = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/go/apis/3');
+        if (!response.ok) {
+          throw new Error(`Error fetching APIs: ${response.statusText}`);
+        }
+        const data: APIData[] = await response.json();
+        console.log('Fetched APIs:', data);
+        setApis(data);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAPIs();
+  }, []);
+
+  // Fetch data for each API
+  useEffect(() => {
+    const getApiData = async (api: APIData) => {
+      try {
+        const response = await fetch(api.apiString);
+        if (!response.ok) {
+          throw new Error(`Error fetching data for API ${api.apiId}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        return { apiId: api.apiId, data }; // Return the API ID and its data
+      } catch (err: any) {
+        console.error(`Error fetching data for API ${api.apiId}:`, err.message);
+        return { apiId: api.apiId, data: null }; // Return null data in case of an error
+      }
+    };
+
+    const fetchAllApiData = async () => {
+      if (apis.length > 0) {
+        try {
+          const results = await Promise.all(apis.map((api) => getApiData(api)));
+          console.log('Fetched API Data:', results);
+          setApiData(results); // Store the fetched data
+        } catch (err) {
+          console.error('Error fetching API data:', err);
+        }
+      }
+    };
+
+    fetchAllApiData();
+  }, [apis]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
+  }
 
   return (
     <div className="overflow-auto">
       <div className="dashboard-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {customLayout ? panes2 : panes}
+        {apis.map((api) => {
+          console.log("Parameters: " + api.parameters);
+          const apiSpecificData = apiData.find((data) => data.apiId === api.apiId)?.data; // Find the data for this API
+          return (
+            <DashboardPane
+              key={api.apiId}
+              index={api.apiId}
+              sizeX={api.paneX}
+              sizeY={api.paneY}
+              queryString={api.apiString}
+              graphType={api.graphType || 'pie'}
+              parameters={api.parameters?.map((p) => (typeof p === 'object' && 'parameter' in p ? p.parameter : p)) || []} // Safely extract parameter strings
+              apiData={apiSpecificData}
+            />
+          );
+        })}
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ interface DashboardPaneProps {
   queryString: string;
   graphType: string;
   parameters?: string[];
+  apiData: any;
 }
 
 const COLORS = ["#8884d8", "#82ca9d", "#ffc658"];
@@ -20,8 +21,16 @@ const AirQualityPieChart: React.FC<{ data: any, sizeX: number, sizeY: number, pa
     const value = data.find((d: any) => d.Parameter === param.toUpperCase())?.AQI || 0;
     return { name: param.toUpperCase(), value };
   });
+  // Extract relevant data based on parameters
+const chartData2 = parameters.map(param => {
+  const value = data.find((d: any) => d.Parameter === param.toUpperCase())?.AQI || 0;
+  return { name: param.toUpperCase(), value };
+});
+
+
 
   return (
+
     <PieChart width={sizeX / 2} height={sizeY / 2}>
       <Pie
         data={chartData}

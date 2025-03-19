@@ -20,6 +20,23 @@ type User struct {
 	Password string `json:"password,omitempty"`
 }
 
+// API struct that reads in the necessary data from the frontend to create a dynamic api
+type API struct {
+	APIId      int         `json:"apiId"`     // Corresponds to APIId SERIAL PRIMARY KEY
+	UserId     int         `json:"userId"`    // Corresponds to UserId INT NOT NULL
+	APIName    string      `json:"apiName"`   // Corresponds to Name (missing in the table definition, added here)
+	APIString  string      `json:"apiString"` // Corresponds to APIString TEXT
+	APIKey     string      `json:"apiKey"`    // Corresponds to APIKey TEXT
+	GraphType  string      `json:"graphType"`
+	PaneX      int         `json:"paneX"`      // Corresponds to PaneX INT
+	PaneY      int         `json:"paneY"`      // Corresponds to PaneY INT
+	Parameters []Parameter `json:"parameters"` // Represents the many-to-one relationship
+}
+
+type Parameter struct {
+	Parameter string `json:"parameter"` // Corresponds to Parameter TEXT
+}
+
 // main function
 func main() {
 	// Get environment variable access
@@ -59,7 +76,7 @@ func main() {
 	log.Println("Created USERS")
 
 	//create apis table
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS APIs (APIId SERIAL PRIMARY KEY, UserId INT NOT NULL, APIString TEXT, APIKey TEXT, PaneX INT, PaneY INT, CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS APIs (APIId SERIAL PRIMARY KEY, UserId INT NOT NULL, APIName TEXT, APIString TEXT, APIKey TEXT, GraphType TEXT, PaneX INT, PaneY INT, CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE)")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,7 +124,11 @@ func main() {
 	router.HandleFunc("/api/go/users/{id}", deleteUser(db)).Methods("DELETE")
 	router.HandleFunc("/api/go/login", loginUser(db)).Methods("POST") // User login
 
-	// wrap the router with CORS and JSON content type middlewares
+	//api to submit an API to the db
+	router.HandleFunc("/api/go/createAPI", createAPI(db)).Methods("POST")
+
+	//api to get all APIs associated with userID
+	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET") // wrap the router with CORS and JSON content type middlewares
 	enhancedRouter := enableCORS(jsonContentTypeMiddleware(router))
 
 	// start server
@@ -288,5 +309,131 @@ func loginUser(db *sql.DB) http.HandlerFunc {
 		storedUser.Password = ""
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(storedUser)
+	}
+}
+
+func createAPI(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input API
+
+		err := json.NewDecoder(r.Body).Decode(&input)
+		if err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+		var apiId int
+
+		err = db.QueryRow(
+			"INSERT INTO APIs (UserId, APIString, APIName, APIKey, GraphType, PaneX, PaneY) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING APIId",
+			input.UserId, input.APIString, input.APIName, input.APIKey, input.GraphType, input.PaneX, input.PaneY,
+		).Scan(&apiId)
+		log.Println(err)
+		if err != nil {
+			log.Printf("Error inserting API: %v", err)
+			http.Error(w, "Failed to create API", http.StatusInternalServerError)
+			return
+		}
+
+		//code for looping over the parameters and inserting into param table
+		for _, param := range input.Parameters {
+			_, err := db.Exec(
+				"INSERT INTO Parameters (APIId, Parameter) VALUES ($1, $2)",
+				apiId, param.Parameter,
+			)
+			if err != nil {
+				log.Printf("Error inserting parameter: %v", err)
+				http.Error(w, "Failed to create parameters", http.StatusInternalServerError)
+				return
+			}
+		}
+		// Return the created API with its parameters as a response
+		input.APIId = apiId // Set the generated APIId
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(input)
+
+	}
+
+}
+func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract userId from the request URL
+		vars := mux.Vars(r)
+		userId := vars["userId"]
+
+		// Query the database for APIs with the given userId
+		rows, err := db.Query("SELECT APIId, UserId, APIName, APIString, APIKey, GraphType, PaneX, PaneY FROM APIs WHERE UserId = $1", userId)
+		if err != nil {
+			log.Printf("Error querying APIs: %v", err)
+			http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		// Create a slice to hold the results
+		var apis []API
+
+		// Iterate over the rows and populate the slice
+		for rows.Next() {
+			var api API
+
+			// Scan the API row
+			err := rows.Scan(&api.APIId, &api.UserId, &api.APIName, &api.APIString, &api.APIKey, &api.GraphType, &api.PaneX, &api.PaneY)
+			if err != nil {
+				log.Printf("Error scanning API row: %v", err)
+				http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
+				return
+			}
+
+			// Query the parameters table to fetch the list of parameters for this API
+			paramRows, err := db.Query("SELECT Parameter FROM Parameters WHERE APIId = $1", api.APIId)
+			if err != nil {
+				log.Printf("Error querying parameters for APIId %d: %v", api.APIId, err)
+				http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+				return
+			}
+			defer paramRows.Close()
+
+			// Create a slice to hold the parameters
+			var parameters []Parameter
+
+			// Iterate over the parameter rows and populate the slice
+			for paramRows.Next() {
+				var param Parameter
+				err := paramRows.Scan(&param.Parameter)
+				if err != nil {
+					log.Printf("Error scanning parameter row: %v", err)
+					http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+					return
+				}
+				log.Println("Parameters:", param)
+
+				parameters = append(parameters, param)
+			}
+
+			// Check for errors during parameter iteration
+			if err := paramRows.Err(); err != nil {
+				log.Printf("Error iterating over parameter rows: %v", err)
+				http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+				return
+			}
+
+			// Assign the parameters to the API struct
+			api.Parameters = parameters
+
+			// Add the API to the result slice
+			apis = append(apis, api)
+		}
+
+		// Check for errors during API iteration
+		if err := rows.Err(); err != nil {
+			log.Printf("Error iterating over API rows: %v", err)
+			http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
+			return
+		}
+
+		// Return the results as JSON
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(apis)
 	}
 }
