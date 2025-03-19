@@ -24,3 +24,17 @@ https://react-icons.github.io/react-icons/
 ### Database
 - postgres
 - Host on fly.io
+
+
+
+
+
+Save your credentials in a secure place -- you won't be able to see them again!
+
+Connect to postgres
+Any app within the jnovak0021@gmail.com organization can connect to this Postgres using the above connection string
+
+Now that you've set up Postgres, here's what you need to understand: https://fly.io/docs/postgres/getting-started/what-you-should-know/
+
+jnova@jacobs_hp MINGW64 /
+$
