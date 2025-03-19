@@ -1,11 +1,10 @@
-
 {
   "scripts": {
     "start": "nodemon index.js"
   },
   "devDependencies": {
     "@types/mapbox-gl": "^3.4.1",
-    "@types/react": "^19.0.10",
+    "@types/react": "^19.0.12",
     "nodemon": "^3.1.9"
   },
   "dependencies": {
