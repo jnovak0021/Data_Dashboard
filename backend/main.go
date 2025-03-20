@@ -123,12 +123,15 @@ func main() {
 	router.HandleFunc("/api/go/users/{id}", updateUser(db)).Methods("PUT")
 	router.HandleFunc("/api/go/users/{id}", deleteUser(db)).Methods("DELETE")
 	router.HandleFunc("/api/go/login", loginUser(db)).Methods("POST") // User login
+	//get the user id on login or authentication by putting the email
+	router.HandleFunc("/api/go/getID/{email}", getUserIdByEmail(db)).Methods("GET")
 
 	//api to submit an API to the db
 	router.HandleFunc("/api/go/createAPI", createAPI(db)).Methods("POST")
 
 	//api to get all APIs associated with userID
 	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET") // wrap the router with CORS and JSON content type middlewares
+
 	enhancedRouter := enableCORS(jsonContentTypeMiddleware(router))
 
 	// start server
@@ -435,5 +438,26 @@ func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
 		// Return the results as JSON
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(apis)
+	}
+}
+
+func getUserIdByEmail(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract email from the request URL
+		vars := mux.Vars(r)
+		email := vars["email"]
+
+		var userId int
+		// Query the database for the user ID with the given email
+		err := db.QueryRow("SELECT id FROM users WHERE email = $1 LIMIT 1", email).Scan(&userId)
+		if err != nil {
+			log.Printf("Error querying user ID for email %s: %v", email, err)
+			http.Error(w, "Failed to fetch user ID", http.StatusInternalServerError)
+			return
+		}
+
+		// Return the user ID as JSON
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{"userId": userId})
 	}
 }

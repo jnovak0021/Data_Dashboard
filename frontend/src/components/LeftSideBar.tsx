@@ -120,7 +120,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
           {/* Settings */}
           <li>
             <a 
-              onClick={() => handleRoute('/settings')}
+              onClick={() => handleRoute('/Settings')}
               className="flex items-center p-2 rounded-lg hover:bg-pink-700 cursor-pointer"
             >
               <FaCog className="text-xl" />

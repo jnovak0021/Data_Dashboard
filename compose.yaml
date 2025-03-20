@@ -1,15 +1,15 @@
 services:
-  watchtower:
-    container_name: watchtower
-    image: containrrr/watchtower
-    command: --interval 5
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_LABEL_ENABLE=true
-      - WATCHTOWER_LABEL_FILTER=watchtower
-    restart: always
+  # watchtower:
+  #   container_name: watchtower
+  #   image: containrrr/watchtower
+  #   command: --interval 5
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   environment:
+  #     - WATCHTOWER_CLEANUP=true
+  #     - WATCHTOWER_LABEL_ENABLE=true
+  #     - WATCHTOWER_LABEL_FILTER=watchtower
+  #   restart: always
   nextapp:
     container_name: nextapp
     image: nextapp:1.0.0

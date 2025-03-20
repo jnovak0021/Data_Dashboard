@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
+import React, { useEffect, useState, useRef } from 'react';
+import PieGraph from './GraphTypes/PieGraph';
+import { CiCircleMinus } from "react-icons/ci";
 
 interface DashboardPaneProps {
   index: number;
@@ -9,53 +10,61 @@ interface DashboardPaneProps {
   graphType: string;
   parameters?: string[];
   apiData: any;
+  onDelete?: (id: number) => void;
 }
 
-const COLORS = ["#8884d8", "#82ca9d", "#ffc658"];
-
-const AirQualityPieChart: React.FC<{ data: any, sizeX: number, sizeY: number, parameters: string[] }> = ({ data, sizeX, sizeY, parameters }) => {
-  if (!data || data.length === 0) return <p>No data available</p>;
-
-  // Extract relevant data based on parameters
-  const chartData = parameters.map(param => {
-    const value = data.find((d: any) => d.Parameter === param.toUpperCase())?.AQI || 0;
-    return { name: param.toUpperCase(), value };
-  });
-  // Extract relevant data based on parameters
-const chartData2 = parameters.map(param => {
-  const value = data.find((d: any) => d.Parameter === param.toUpperCase())?.AQI || 0;
-  return { name: param.toUpperCase(), value };
-});
-
-
-
-  return (
-
-    <PieChart width={sizeX / 2} height={sizeY / 2}>
-      <Pie
-        data={chartData}
-        cx={(sizeX / 4)}
-        cy={(sizeY / 4)}
-        innerRadius={sizeX / 10}
-        outerRadius={sizeX / 5}
-        fill="#8884d8"
-        paddingAngle={5}
-        dataKey="value"
-      >
-        {chartData.map((entry, index) => (
-          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-        ))}
-      </Pie>
-      <Tooltip />
-      <Legend />
-    </PieChart>
-  );
-};
-
-const DashboardPane: React.FC<DashboardPaneProps> = ({ index, sizeX, sizeY, queryString, graphType, parameters }) => {
+const DashboardPane: React.FC<DashboardPaneProps> = ({ 
+  index, 
+  sizeX, 
+  sizeY, 
+  queryString, 
+  graphType, 
+  parameters,
+  apiData,
+  onDelete
+}) => {
   const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
+  // Update dimensions when container size changes
   useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const { width, height } = containerRef.current.getBoundingClientRect();
+        setDimensions({ width, height });
+      }
+    };
+
+    // Initial dimensions
+    updateDimensions();
+
+    // Update dimensions on resize
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    // Update on window resize as well
+    window.addEventListener('resize', updateDimensions);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, []);
+
+  // Fetch data if apiData is not provided
+  useEffect(() => {
+    if (apiData) {
+      setData(apiData);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     fetch(queryString)
       .then(response => response.json())
       .then(jsonData => {
@@ -67,24 +76,65 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({ index, sizeX, sizeY, quer
         
         setData(filteredData);
         console.log(filteredData);
+        setLoading(false);
       })
-      .catch(error => setData(`Error: ${error.message}`));
-  }, [queryString]);
+      .catch(error => {
+        setError(`Error: ${error.message}`);
+        setLoading(false);
+      });
+  }, [queryString, apiData]);
+
+  // Handle delete button click
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (onDelete) {
+      onDelete(index);
+    }
+  };
 
   return (
-    <div
-      className="pane border border-gray-300 bg-mainPink p-4 m-2 overflow-auto"
-      style={{ width: `${sizeX}px`, height: `${sizeY}px` }}
+    <div 
+      ref={containerRef}
+      className="pane relative w-full h-full border border-gray-300 bg-mainPink p-4 rounded-lg shadow overflow-hidden group"
     >
-      {data ? (
-        graphType === "pie" ? (
-          <AirQualityPieChart data={data} sizeX={sizeX} sizeY={sizeY} parameters={parameters || []} />
-        ) : (
-          <p>Unsupported graph type</p>
-        )
-      ) : (
-        'Loading...'
+      {/* Delete button with explicit styling to ensure visibility */}
+      {onDelete && (
+        <button 
+          className="btn-delete absolute top-2 right-2 z-50 bg-red-500 hover:bg-red-700 text-white rounded-full p-1 transition-colors opacity-0 group-hover:opacity-100"
+          onClick={handleDelete}
+          aria-label="Delete pane"
+        >
+          <CiCircleMinus size={20} />
+        </button>
       )}
+      
+      {/* Main content */}
+      <div className="w-full h-full flex items-center justify-center">
+        {loading ? (
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        ) : error ? (
+          <div className="text-red-500">{error}</div>
+        ) : data ? (
+          graphType === "pie" ? (
+            <PieGraph 
+              data={data} 
+              sizeX={dimensions.width - 32} 
+              sizeY={dimensions.height - 32} 
+              parameters={parameters || []} 
+            />
+          ) : (
+            <div className="text-center text-white">
+              <p>Unsupported graph type: {graphType}</p>
+              <p className="text-sm">Add support for this graph type in GraphTypes folder</p>
+            </div>
+          )
+        ) : (
+          <div>No data available</div>
+        )}
+      </div>
     </div>
   );
 };
