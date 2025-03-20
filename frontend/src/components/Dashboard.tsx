@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import DashboardPane from './DashboardPane';
+import { fetchUserId } from "../../utils/auth";
+
 
 interface APIData {
   apiId: number;
@@ -15,19 +17,27 @@ interface APIData {
 
 interface DashboardProps {
   customLayout?: boolean;
+  refresh: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ customLayout = false }) => {
+const Dashboard: React.FC<DashboardProps> = ({ refresh /*customLayout = false*/ }) => {
   const [apis, setApis] = useState<APIData[]>([]);
   const [apiData, setApiData] = useState<{ apiId: number; data: any }[]>([]); // To store the fetched data for each API
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState(0)
 
   // Fetch the list of APIs
   useEffect(() => {
     const fetchAPIs = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/go/apis/3');
+        const fetchedUserId = await fetchUserId(); // Await the user ID
+        if (fetchedUserId === null) {
+          throw new Error('Failed to fetch user ID');
+        }
+        setUserId(fetchedUserId);
+
+        const response = await fetch(`http://localhost:8000/api/go/apis/${fetchedUserId}`);
         if (!response.ok) {
           throw new Error(`Error fetching APIs: ${response.statusText}`);
         }
@@ -40,9 +50,10 @@ const Dashboard: React.FC<DashboardProps> = ({ customLayout = false }) => {
         setLoading(false);
       }
     };
-
     fetchAPIs();
-  }, []);
+  }, [refresh]);
+
+
 
   // Fetch data for each API
   useEffect(() => {
@@ -85,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ customLayout = false }) => {
 
   return (
     <div className="overflow-auto">
-      <div className="dashboard-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="dashboard-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1">
         {apis.map((api) => {
           console.log("Parameters: " + api.parameters);
           const apiSpecificData = apiData.find((data) => data.apiId === api.apiId)?.data; // Find the data for this API
