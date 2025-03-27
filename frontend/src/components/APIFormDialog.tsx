@@ -1,8 +1,8 @@
-
-
 import { useState } from 'react';
 import { CiCirclePlus, CiCircleMinus  } from "react-icons/ci";
 import { fetchUserId } from "../../utils/auth";
+import { APIPreview } from '@/components/APIPreview';
+
 
 interface APIData {
   apiId: number;
@@ -21,7 +21,7 @@ interface APIFormDialogProps {
 
 export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
     const [isOpen, setIsOpen] = useState(false);
-  const [formData, setFormData] = useState<Partial<APIData>>({
+    const [formData, setFormData] = useState<Partial<APIData>>({
     graphType: 'line',
     paneX: 300,
     paneY: 300,
@@ -30,6 +30,13 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
   const [newParameter, setNewParameter] = useState('');
   const [jsonString, setJsonString] = useState('');
   const apiUrl = process.env.BACKEND_URL;
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedParams, setSelectedParams] = useState<string[]>([]);
+
+  const handleSelectParameters = (parameters: string[]) => {
+    setSelectedParams(parameters);
+    console.log('Selected parameters:', parameters);
+  };
 
 
   const createAPI = async (jsonString: string) => {
@@ -176,6 +183,38 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
+                <div>
+
+
+                    <div className="bg-background space-y-4">
+                        <button
+                            type="button"
+                            onClick={() => setIsModalOpen(true)}
+                            className="px-4 py-2 bg-mainPink-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                        Open API Preview
+                        </button>
+
+                        {selectedParams.length > 0 && (
+                        <div className="bg-background p-4 rounded-lg shadow">
+                            <h2 className=" bg-background font-semibold mb-2">Selected Parameters:</h2>
+                            <div className="font-mono text-sm">
+                            {selectedParams.join(', ')}
+                            </div>
+                        </div>
+                        )}
+                    </div>
+                    
+
+                    <APIPreview 
+                        apiUrl="https://api.weather.gov/points/32.7157,-117.1611"
+                        isOpen={isModalOpen}
+                        onClose={() => setIsModalOpen(false)}
+                        onSelectedParameters={handleSelectParameters}
+                    />
+
+
+                </div>
               <label htmlFor="graphType" className="text-right text-sm font-medium text-muted-foreground">
                 Graph Type
               </label>
@@ -220,6 +259,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
 
             <div className="space-y-3">
               <label className="block text-sm font-medium text-muted-foreground">Parameters</label>
+
               <div className="flex gap-2">
                 <input
                   value={newParameter}
