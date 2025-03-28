@@ -20,7 +20,7 @@ interface APIFormDialogProps {
 }
 
 export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
-    const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<APIData>>({
     graphType: 'line',
     paneX: 300,
@@ -228,6 +228,9 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                   className="flex-1 px-3 py-2 rounded-md border border-input bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/20"
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addParameter())}
                 />
+                <input>
+                
+                </input>
                 <button 
                   type="button"
                   onClick={addParameter}
