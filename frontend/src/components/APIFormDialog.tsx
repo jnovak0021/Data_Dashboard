@@ -228,9 +228,11 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                   className="flex-1 px-3 py-2 rounded-md border border-input bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/20"
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addParameter())}
                 />
-                <input>
-                
-                </input>
+                <input 
+                  className="px-3 py-2 flex-1 size-10 border border-white bg-transparent rounded-md"
+                  placeholder='Value'
+                  
+                />                                
                 <button 
                   type="button"
                   onClick={addParameter}
