@@ -3,7 +3,6 @@ import { CiCirclePlus, CiCircleMinus  } from "react-icons/ci";
 import { fetchUserId } from "../../utils/auth";
 import { APIPreview } from '@/components/APIPreview';
 
-
 interface APIData {
   apiId: number;
   userId: number;
@@ -15,8 +14,9 @@ interface APIData {
   paneY: number;
   parameters: (string | { parameter: string })[] | null;
 }
+
 interface APIFormDialogProps {
-    onFormSubmit: () => void; // Callback to notify parent about form submission
+    onFormSubmit: () => void;
 }
 
 export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
@@ -35,12 +35,17 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
 
   const handleSelectParameters = (parameters: string[]) => {
     setSelectedParams(parameters);
+    // Update formData with selected parameters
+    setFormData(prev => ({
+      ...prev,
+      parameters: parameters
+    }));
     console.log('Selected parameters:', parameters);
   };
 
-
   const createAPI = async (jsonString: string) => {
     try {
+      console.log("Creating API with data:", jsonString);
       const res = await fetch(`http://localhost:8000/api/go/createAPI`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,28 +58,36 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
   
       const data = await res.json();
       console.log('API POST Response:', data);
+      return data;
     } catch (error) {
       console.error('Error creating API:', error);
+      throw error;
     }
   };
 
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Form submission started");
 
     try {
-      // Fetch the userId
+      if (!formData.apiName || !formData.apiString) {
+        console.error('Required fields missing');
+        return;
+      }
+
       const userId = await fetchUserId();
       if (userId === null) {
         throw new Error('Failed to fetch user ID');
       }
 
-      // Format the parameters to match the desired structure
-      const formattedParameters = (formData.parameters || []).map((param) =>
+      // Combine manually added parameters with selected parameters
+      const allParameters = [...(formData.parameters || [])];
+      console.log("All parameters before formatting:", allParameters);
+
+      const formattedParameters = allParameters.map((param) =>
         typeof param === 'string' ? { parameter: param } : param
       );
 
-      // Create the final JSON structure
       const updatedFormData = {
         userId,
         apiString: formData.apiString,
@@ -86,16 +99,11 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
         parameters: formattedParameters,
       };
 
-      // Convert the updated form data to a JSON string
+      console.log("Submitting data:", updatedFormData);
       const jsonString = JSON.stringify(updatedFormData);
-
-      // Call the createAPI function to send the data to the backend
       await createAPI(jsonString);
-
-      // Notify the parent component about the form submission
+      console.log("API created successfully");
       onFormSubmit();
-
-      // Close the dialog
       setIsOpen(false);
     } catch (error) {
       console.error('Error submitting form:', error);
@@ -126,12 +134,12 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
         className="px-4 py-2 rounded-full border border-border bg-background hover:bg-primary hover:text-primary-foreground transition-colors duration-200 flex items-center justify-center text-sm font-medium"
       >
         <CiCirclePlus className="text-white" />
-    </button>
+      </button>
     );
   }
 
   return (
-    <div className="fixed inset-0 text-white bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 text-white bg-black/50 backdrop-blur-sm flex items-center h-screen justify-center z-50">
       <div className="bg-background/95 w-full max-w-[425px] rounded-lg shadow-lg border border-border/50 p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-white">Add New API</h2>
@@ -151,6 +159,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
               </label>
               <input
                 id="apiName"
+                required
                 className="col-span-3 w-full px-3 py-2 rounded-md border border-input bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={formData.apiName || ''}
                 onChange={(e) => setFormData({ ...formData, apiName: e.target.value })}
@@ -163,6 +172,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
               </label>
               <input
                 id="apiString"
+                required
                 className="col-span-3 w-full px-3 py-2 rounded-md border border-input bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={formData.apiString || ''}
                 onChange={(e) => setFormData({ ...formData, apiString: e.target.value })}
@@ -183,38 +193,6 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
-                <div>
-
-
-                    <div className="bg-background space-y-4">
-                        <button
-                            type="button"
-                            onClick={() => setIsModalOpen(true)}
-                            className="px-4 py-2 bg-mainPink-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                        >
-                        Open API Preview
-                        </button>
-
-                        {selectedParams.length > 0 && (
-                        <div className="bg-background p-4 rounded-lg shadow">
-                            <h2 className=" bg-background font-semibold mb-2">Selected Parameters:</h2>
-                            <div className="font-mono text-sm">
-                            {selectedParams.join(', ')}
-                            </div>
-                        </div>
-                        )}
-                    </div>
-                    
-
-                    <APIPreview 
-                        apiUrl="https://api.weather.gov/points/32.7157,-117.1611"
-                        isOpen={isModalOpen}
-                        onClose={() => setIsModalOpen(false)}
-                        onSelectedParameters={handleSelectParameters}
-                    />
-
-
-                </div>
               <label htmlFor="graphType" className="text-right text-sm font-medium text-muted-foreground">
                 Graph Type
               </label>
@@ -229,7 +207,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                 <option className="bg-background text-white" value="pie">Pie</option>
                 <option className="bg-background text-white" value="scatter">Scatter</option>
               </select>
-            </div> 
+            </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <label htmlFor="paneX" className="text-right text-sm font-medium text-muted-foreground">
@@ -257,9 +235,37 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
               />
             </div>
 
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-muted-foreground">Parameters</label>
+            {/* API Preview Section - Full Width */}
+            <div className="col-span-4 w-full space-y-4">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="w-full px-4 py-3 rounded-md border border-input bg-mainPink-500 text-white hover:bg-blue-600 transition-colors text-center font-medium"
+              >
+                Open API Preview to Select/Deselect Parameters
+              </button>
 
+              {selectedParams.length > 0 && (
+                <div className="w-full bg-background/50 p-4 rounded-lg shadow border border-border/50">
+                  <h2 className="font-semibold mb-2 text-white">Selected Parameters:</h2>
+                  <div className="font-mono text-sm text-white/80 break-words">
+                    {selectedParams.join(', ')}
+                  </div>
+                </div>
+              )}
+
+              <APIPreview 
+                //apiUrl= {formData.apiString || ""}
+                apiUrl="https://api.weather.gov/points/32.7157,-117.1611"
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSelectedParameters={handleSelectParameters}
+              />
+            </div>
+
+            {/* Parameters Section */}
+            <div className="w-full space-y-3">
+              <label className="block text-sm font-medium text-muted-foreground">Additional Parameters</label>
               <div className="flex gap-2">
                 <input
                   value={newParameter}
@@ -273,7 +279,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                   onClick={addParameter}
                   className="px-3 py-2 rounded-md border border-border bg-background hover:bg-primary hover:text-primary-foreground transition-colors duration-200 text-sm font-medium"
                 >
-                    <CiCirclePlus className="text-white" />
+                  <CiCirclePlus className="text-white" />
                 </button>
               </div>
               <div className="space-y-2 mt-2 max-h-[200px] overflow-y-auto pr-2">
@@ -288,7 +294,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                       onClick={() => removeParameter(index)}
                       className="px-2 py-1 rounded-md hover:bg-destructive hover:text-destructive-foreground transition-colors duration-200 text-xs font-medium"
                     >
-                    <CiCircleMinus className="text-white" />
+                      <CiCircleMinus className="text-white" />
                     </button>                    
                   </div>
                 ))}

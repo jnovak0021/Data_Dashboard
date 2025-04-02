@@ -39,7 +39,7 @@ const DashboardPage = () => {
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">{dashboardTitle}</h1>
         <div className="bg-white shadow-lg rounded-lg p-6">
-          <Dashboard customLayout={id === 'dashboard2'} />
+          <Dashboard refresh= {true} customLayout={ id === 'dashboard2'} />
         </div>
       </div>
     </DashboardLayout>

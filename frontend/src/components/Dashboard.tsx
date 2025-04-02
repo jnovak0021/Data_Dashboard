@@ -20,7 +20,7 @@ interface DashboardProps {
   refresh: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ refresh /*customLayout = false*/ }) => {
+const Dashboard: React.FC<DashboardProps> = ({ refresh, customLayout = false }) => {
   const [apis, setApis] = useState<APIData[]>([]);
   const [apiData, setApiData] = useState<{ apiId: number; data: any }[]>([]); // To store the fetched data for each API
   const [loading, setLoading] = useState<boolean>(true);
