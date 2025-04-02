@@ -14,10 +14,11 @@ import (
 )
 
 type User struct {
-	Id       int    `json:"id"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password,omitempty"`
+	Id         int         `json:"id"`
+	Name       string      `json:"name"`
+	Email      string      `json:"email"`
+	Password   string      `json:"password,omitempty"`
+	Dashboards []Dashboard `json:"dashboards"`
 }
 
 // API struct that reads in the necessary data from the frontend to create a dynamic api
@@ -35,6 +36,13 @@ type API struct {
 
 type Parameter struct {
 	Parameter string `json:"parameter"` // Corresponds to Parameter TEXT
+}
+
+// Dashboards
+type Dashboard struct {
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Panes []API  `json:"panes"`
 }
 
 // main function
@@ -88,6 +96,12 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("Created Parameters")
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS Dashboards (DashboardId SERIAL PRIMARY KEY, UserId INT NOT NULL, Name TEXT, CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE)")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Created Dashboards")
 
 	/*
 		CREATE TABLE IF NOT EXISTS users (

@@ -209,30 +209,10 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
       
       return newLayouts;
     });
-    
-    // Uncomment and adapt this code when you have a backend API endpoint for delete
-    // deleteAPIFromBackend(apiId);
+         
+    //deleteAPIFromBackend(apiId);
   };
   
-  // Optional: Function to delete API from backend
-  /*
-  const deleteAPIFromBackend = async (apiId: number) => {
-    try {
-      const response = await fetch(`http://localhost:8000/api/go/apis/${apiId}`, {
-        method: 'DELETE',
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error deleting API: ${response.statusText}`);
-      }
-      
-      console.log(`Successfully deleted API ${apiId} from backend`);
-    } catch (error) {
-      console.error('Failed to delete API from backend:', error);
-    }
-  };
-  */
-
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading...</div>;
   }
