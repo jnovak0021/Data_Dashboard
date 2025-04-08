@@ -44,6 +44,7 @@ const DashboardPage = () => {
   return (
     <DashboardLayout userEmail={userEmail} onLogout={handleLogout}>
       <div className="p-6">
+
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">{dashboardTitle}</h1>
           <APIFormDialog onFormSubmit={handleFormSubmit} />
