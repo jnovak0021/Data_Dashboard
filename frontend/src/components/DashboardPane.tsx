@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import PieGraph from './GraphTypes/PieGraph';
 import { CiCircleMinus } from "react-icons/ci";
+import PieGraph from './GraphTypes/PieGraph';
+import LineGraph from './GraphTypes/LineGraph';
+import ScatterPlot from './GraphTypes/ScatterPlot';
+import BarGraph from './GraphTypes/BarGraph';
+
 
 interface DashboardPaneProps {
   index: number;
@@ -120,6 +124,27 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
         ) : data ? (
           graphType === "pie" ? (
             <PieGraph 
+              data={data} 
+              sizeX={dimensions.width - 32} 
+              sizeY={dimensions.height - 32} 
+              parameters={parameters || []} 
+            />
+          ) : graphType === "line" ? (
+            <LineGraph 
+              data={data} 
+              sizeX={dimensions.width - 32} 
+              sizeY={dimensions.height - 32} 
+              parameters={parameters || []} 
+            />
+          ) : graphType === "scatter" ? (
+            <ScatterPlot 
+              data={data} 
+              sizeX={dimensions.width - 32} 
+              sizeY={dimensions.height - 32} 
+              parameters={parameters || []} 
+            />
+          ) : graphType === "bar" ? (
+            <BarGraph 
               data={data} 
               sizeX={dimensions.width - 32} 
               sizeY={dimensions.height - 32} 
