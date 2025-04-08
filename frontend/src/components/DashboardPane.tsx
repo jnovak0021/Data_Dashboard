@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import PieGraph from './GraphTypes/PieGraph';
+import { CiCircleMinus } from "react-icons/ci";
 
 interface DashboardPaneProps {
   index: number;
@@ -9,12 +10,61 @@ interface DashboardPaneProps {
   graphType: string;
   parameters?: string[];
   apiData: any;
+  onDelete?: (id: number) => void;
 }
 
-const DashboardPane: React.FC<DashboardPaneProps> = ({ index, sizeX, sizeY, queryString, graphType, parameters }) => {
+const DashboardPane: React.FC<DashboardPaneProps> = ({ 
+  index, 
+  sizeX, 
+  sizeY, 
+  queryString, 
+  graphType, 
+  parameters,
+  apiData,
+  onDelete
+}) => {
   const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
+  // Update dimensions when container size changes
   useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const { width, height } = containerRef.current.getBoundingClientRect();
+        setDimensions({ width, height });
+      }
+    };
+
+    // Initial dimensions
+    updateDimensions();
+
+    // Update dimensions on resize
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    // Update on window resize as well
+    window.addEventListener('resize', updateDimensions);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, []);
+
+  // Fetch data if apiData is not provided
+  useEffect(() => {
+    if (apiData) {
+      setData(apiData);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     fetch(queryString)
       .then(response => response.json())
       .then(jsonData => {
@@ -26,28 +76,63 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({ index, sizeX, sizeY, quer
         
         setData(filteredData);
         console.log(filteredData);
+        setLoading(false);
       })
-      .catch(error => setData(`Error: ${error.message}`));
-  }, [queryString]);
+      .catch(error => {
+        setError(`Error: ${error.message}`);
+        setLoading(false);
+      });
+  }, [queryString, apiData]);
+
+  // Handle delete button click
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (onDelete) {
+      onDelete(index);
+    }
+  };
 
   return (
-    <div
-      className="pane border border-gray-300 bg-mainPink p-4 m-2 flex items-center justify-center"
-      style={{ 
-        width: `${sizeX}px`, 
-        height: `${sizeY}px`,
-        overflow: 'hidden'
-      }}
+    <div 
+      ref={containerRef}
+      className="pane relative w-full h-full border border-gray-300 bg-mainPink p-4 rounded-lg shadow overflow-hidden group"
     >
+      {/* Delete button with explicit styling to ensure visibility */}
+      {onDelete && (
+        <button 
+          className="btn-delete absolute top-2 right-2 z-50 bg-red-500 hover:bg-red-700 text-white rounded-full p-1 transition-colors opacity-0 group-hover:opacity-100"
+          onClick={handleDelete}
+          aria-label="Delete pane"
+        >
+          <CiCircleMinus size={20} />
+        </button>
+      )}
+      
+      {/* Main content */}
       <div className="w-full h-full flex items-center justify-center">
-        {data ? (
+        {loading ? (
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        ) : error ? (
+          <div className="text-red-500">{error}</div>
+        ) : data ? (
           graphType === "pie" ? (
-            <PieGraph data={data} sizeX={sizeX - 32} sizeY={sizeY - 32} parameters={parameters || []} />
+            <PieGraph 
+              data={data} 
+              sizeX={dimensions.width - 32} 
+              sizeY={dimensions.height - 32} 
+              parameters={parameters || []} 
+            />
           ) : (
-            <p>Unsupported graph type</p>
+            <div className="text-center text-white">
+              <p>Unsupported graph type: {graphType}</p>
+              <p className="text-sm">Add support for this graph type in GraphTypes folder</p>
+            </div>
           )
         ) : (
-          'Loading...'
+          <div>No data available</div>
         )}
       </div>
     </div>

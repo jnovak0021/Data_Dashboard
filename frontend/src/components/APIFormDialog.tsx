@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CiCirclePlus, CiCircleMinus  } from "react-icons/ci";
+import { CiCirclePlus, CiCircleMinus } from "react-icons/ci";
 import { fetchUserId } from "../../utils/auth";
 import { APIPreview } from '@/components/APIPreview';
 
@@ -16,12 +16,12 @@ interface APIData {
 }
 
 interface APIFormDialogProps {
-    onFormSubmit: () => void;
+  onFormSubmit: () => void;
 }
 
 export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [formData, setFormData] = useState<Partial<APIData>>({
+  const [isOpen, setIsOpen] = useState(false);
+  const [formData, setFormData] = useState<Partial<APIData>>({
     graphType: 'line',
     paneX: 300,
     paneY: 300,
@@ -32,16 +32,25 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
   const apiUrl = process.env.BACKEND_URL;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedParams, setSelectedParams] = useState<string[]>([]);
+  const [apiKeyParam, setApiKeyParam] = useState('apikey');
 
   const handleSelectParameters = (parameters: string[]) => {
     setSelectedParams(parameters);
-    // Update formData with selected parameters
     setFormData(prev => ({
       ...prev,
       parameters: parameters
     }));
     console.log('Selected parameters:', parameters);
   };
+
+  const clearForm : Partial<APIData> = {
+    graphType: 'line',
+    paneX: 300,
+    paneY: 300,
+    parameters: [],
+  };
+
+  
 
   const createAPI = async (jsonString: string) => {
     try {
@@ -51,11 +60,11 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
         headers: { 'Content-Type': 'application/json' },
         body: jsonString,
       });
-  
+
       if (!res.ok) {
         throw new Error(`Failed to create API: ${res.statusText}`);
       }
-  
+
       const data = await res.json();
       console.log('API POST Response:', data);
       return data;
@@ -63,6 +72,16 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
       console.error('Error creating API:', error);
       throw error;
     }
+  };
+
+  const processApiString = (apiString: string, apiKeyParamName: string, apiKey: string): string => {
+    if (apiKeyParamName === 'NONE' || !apiKey) {
+      return apiString;
+    }
+
+    const url = new URL(apiString);
+    url.searchParams.append(apiKeyParamName, apiKey);
+    return url.toString();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,7 +99,13 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
         throw new Error('Failed to fetch user ID');
       }
 
-      // Combine manually added parameters with selected parameters
+      // Process API string with API key if needed
+      const processedApiString = processApiString(
+        formData.apiString,
+        apiKeyParam,
+        formData.apiKey || ''
+      );
+
       const allParameters = [...(formData.parameters || [])];
       console.log("All parameters before formatting:", allParameters);
 
@@ -90,7 +115,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
 
       const updatedFormData = {
         userId,
-        apiString: formData.apiString,
+        apiString: processedApiString, // Use the processed API string
         apiName: formData.apiName,
         apiKey: formData.apiKey,
         graphType: formData.graphType,
@@ -104,6 +129,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
       await createAPI(jsonString);
       console.log("API created successfully");
       onFormSubmit();
+      setFormData(clearForm);
       setIsOpen(false);
     } catch (error) {
       console.error('Error submitting form:', error);
@@ -178,6 +204,29 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                 onChange={(e) => setFormData({ ...formData, apiString: e.target.value })}
               />
             </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="apiKeyParameter" className="text-right text-sm font-medium text-muted-foreground">
+                API Key Parameter Name:
+              </label>
+              <select
+                id="keyParam"
+                value={apiKeyParam}
+                onChange={(e) => setApiKeyParam(e.target.value)}
+                className="col-span-3 w-full px-3 py-2 rounded-md border border-input bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option className="bg-background text-white" value="apikey">apikey</option>
+                <option className="bg-background text-white" value="api_key">api_key</option>
+                <option className="bg-background text-white" value="key">key</option>
+                <option className="bg-background text-white" value="Authorization">Authorization</option>
+                <option className="bg-background text-white" value="access_token">access_token</option>
+                <option className="bg-background text-white" value="token">token</option>
+                <option className="bg-background text-white" value="X-API-KEY">X-API-KEY</option>
+                <option className="bg-background text-white" value="X-Auth-Token">X-Auth-Token</option>
+                <option className="bg-background text-white" value="X-Access-Token">X-Access-Token</option>
+                <option className="bg-background text-white" value="auth">auth</option>
+                <option className="bg-background text-white" value="NONE">NONE</option>
+              </select>
+            </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <label htmlFor="apiKey" className="text-right text-sm font-medium text-muted-foreground">
@@ -235,7 +284,6 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
               />
             </div>
 
-            {/* API Preview Section - Full Width */}
             <div className="col-span-4 w-full space-y-4">
               <button
                 type="button"
@@ -255,15 +303,13 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
               )}
 
               <APIPreview 
-                //apiUrl= {formData.apiString || ""}
-                apiUrl="https://api.weather.gov/points/32.7157,-117.1611"
+                apiUrl={formData.apiString || ""}
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSelectedParameters={handleSelectParameters}
               />
             </div>
 
-            {/* Parameters Section */}
             <div className="w-full space-y-3">
               <label className="block text-sm font-medium text-muted-foreground">Additional Parameters</label>
               <div className="flex gap-2">

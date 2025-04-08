@@ -230,12 +230,25 @@ export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: AP
         </div>
         
         <div className="overflow-y-auto max-h-[calc(90vh-4rem)]">
+          
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <AiOutlineLoading3Quarters className="w-8 h-8 animate-spin text-blue-500" />
+
             </div>
+            
           ) : error ? (
-            <div className="text-red-500 text-center py-12">{error}</div>
+            <>
+              
+              <div className="text-red-500 text-center py-12">{error}</div>
+              <button
+                    onClick={onClose}
+                    className="px-4 py-2 bg-gray-700 text-center text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2"
+                  >
+                    <IoClose className="w-5 h-5" />
+                    Close
+                  </button>
+            </>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-gray-700">
               <div className="p-4">
