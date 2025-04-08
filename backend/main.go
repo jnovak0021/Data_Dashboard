@@ -129,6 +129,8 @@ func main() {
 	//api to submit an API to the db
 	router.HandleFunc("/api/go/createAPI", createAPI(db)).Methods("POST")
 
+	//router to delete api from the db and casecade
+	router.HandleFunc("/api/go/deleteAPI/{index}", deleteAPI(db)).Methods("DELETE")
 	//api to get all APIs associated with userID
 	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET") // wrap the router with CORS and JSON content type middlewares
 
@@ -459,5 +461,31 @@ func getUserIdByEmail(db *sql.DB) http.HandlerFunc {
 		// Return the user ID as JSON
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]int{"userId": userId})
+	}
+}
+func deleteAPI(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id := vars["index"]
+
+		// Delete all parameters associated with the API
+		_, err1 := db.Exec("DELETE FROM parameters WHERE apiid = $1", id)
+		if err1 != nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete parameters"})
+			return
+		}
+
+		// Delete the API
+		_, err2 := db.Exec("DELETE FROM apis WHERE apiid = $1", id)
+		if err2 != nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Failed to delete API"})
+			return
+		}
+
+		// Send success response
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"message": "API deleted successfully"})
 	}
 }

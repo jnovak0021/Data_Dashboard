@@ -26,6 +26,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
@@ -85,11 +86,34 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
   }, [queryString, apiData]);
 
   // Handle delete button click
-  const handleDelete = (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    if (onDelete) {
+    
+    if (!onDelete || isDeleting) return;
+
+    setIsDeleting(true);
+    console.log(`Attempting to delete pane with index: ${index}`);
+
+    try {
+      // First try to delete from backend
+      const response = await fetch(`http://localhost:8000/api/go/deleteAPI/${index}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error deleting API: ${response.statusText}`);
+      }
+      
+      console.log(`Successfully deleted API ${index} from backend`);
+      
+      // If backend delete successful, update frontend
       onDelete(index);
+    } catch (error) {
+      console.error('Failed to delete API:', error);
+      setError('Failed to delete pane. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -101,11 +125,14 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       {/* Delete button with explicit styling to ensure visibility */}
       {onDelete && (
         <button 
-          className="btn-delete absolute top-2 right-2 z-50 bg-red-500 hover:bg-red-700 text-white rounded-full p-1 transition-colors opacity-0 group-hover:opacity-100"
+          className={`btn-delete absolute top-2 right-2 z-50 ${
+            isDeleting ? 'bg-gray-500' : 'bg-red-500 hover:bg-red-700'
+          } text-white rounded-full p-1 transition-colors opacity-0 group-hover:opacity-100 disabled:cursor-not-allowed`}
           onClick={handleDelete}
-          aria-label="Delete pane"
+          disabled={isDeleting}
+          aria-label={isDeleting ? "Deleting..." : "Delete pane"}
         >
-          <CiCircleMinus size={20} />
+          <CiCircleMinus size={20} className={isDeleting ? 'animate-spin' : ''} />
         </button>
       )}
       
