@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -14,10 +15,11 @@ import (
 )
 
 type User struct {
-	Id       int    `json:"id"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password,omitempty"`
+	Id         int         `json:"id"`
+	Name       string      `json:"name"`
+	Email      string      `json:"email"`
+	Password   string      `json:"password,omitempty"`
+	Dashboards []Dashboard `json:"dashboards"`
 }
 
 // API struct that reads in the necessary data from the frontend to create a dynamic api
@@ -35,6 +37,14 @@ type API struct {
 
 type Parameter struct {
 	Parameter string `json:"parameter"` // Corresponds to Parameter TEXT
+}
+
+// Updated Dashboard struct with UserId
+type Dashboard struct {
+	Id     int    `json:"id"`
+	UserId int    `json:"userId"`
+	Name   string `json:"name"`
+	Panes  []API  `json:"panes"`
 }
 
 // main function
@@ -80,7 +90,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("APIs")
+	log.Println("Created APIs")
 
 	//create parameters table if doesnt exist
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS Parameters (ParamId SERIAL PRIMARY KEY, APIId INT NOT NULL, Parameter TEXT, CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE)")
@@ -89,49 +99,48 @@ func main() {
 	}
 	log.Println("Created Parameters")
 
-	/*
-		CREATE TABLE IF NOT EXISTS users (
-		    id SERIAL PRIMARY KEY,
-		    name TEXT,
-		    email TEXT UNIQUE,
-		    password TEXT
-		);
+	// Create dashboards table with correct foreign key
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS Dashboards (DashboardId SERIAL PRIMARY KEY, UserId INT NOT NULL, Name TEXT, CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE)")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Created Dashboards")
 
-		CREATE TABLE IF NOT EXISTS APIs (  -- Renamed table from "API" to "APIs" (Avoids reserved keyword issues)
-		    APIId SERIAL PRIMARY KEY,
-		    UserId INT NOT NULL,
-		    APIString TEXT,
-		    APIKey TEXT,
-		    PaneX INT,
-		    PaneY INT,
-		    CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE
-		);
-
-		CREATE TABLE IF NOT EXISTS Parameters (
-		    ParamId SERIAL PRIMARY KEY,
-		    APIId INT NOT NULL,
-		    Parameter TEXT,  -- Fixed typo (was "Paramter")
-		    CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE
-		);
-	*/
+	// Create dashboard panes mapping table
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS DashboardPanes (DashboardPaneId SERIAL PRIMARY KEY, DashboardId INT NOT NULL, APIId INT NOT NULL, CONSTRAINT fk_dashboard FOREIGN KEY (DashboardId) REFERENCES Dashboards(DashboardId) ON DELETE CASCADE, CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE)")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Created DashboardPanes")
 
 	// create router
 	router := mux.NewRouter()
+
+	// User routes
 	router.HandleFunc("/api/go/users", getUsers(db)).Methods("GET")
 	router.HandleFunc("/api/go/users", createUser(db)).Methods("POST")
 	router.HandleFunc("/api/go/users/{id}", getUser(db)).Methods("GET")
 	router.HandleFunc("/api/go/users/{id}", updateUser(db)).Methods("PUT")
 	router.HandleFunc("/api/go/users/{id}", deleteUser(db)).Methods("DELETE")
-	router.HandleFunc("/api/go/login", loginUser(db)).Methods("POST") // User login
-	//get the user id on login or authentication by putting the email
-	router.HandleFunc("/api/go/getID/{email}", getUserIdByEmail(db)).Methods("GET")
+	router.HandleFunc("/api/go/login", loginUser(db)).Methods("POST")               // User login
+	router.HandleFunc("/api/go/getID/{email}", getUserIdByEmail(db)).Methods("GET") // Get user ID by email
 
-	//api to submit an API to the db
+	// API routes
 	router.HandleFunc("/api/go/createAPI", createAPI(db)).Methods("POST")
+	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET")
 
-	//api to get all APIs associated with userID
-	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET") // wrap the router with CORS and JSON content type middlewares
+	// Dashboard routes
+	router.HandleFunc("/api/go/createDashboard", createDashboard(db)).Methods("POST")
+	router.HandleFunc("/api/go/dashboards/user/{userId}", getDashboardsByUserId(db)).Methods("GET")
+	router.HandleFunc("/api/go/dashboards/{id}", getDashboardById(db)).Methods("GET")
+	router.HandleFunc("/api/go/dashboards/{id}", updateDashboard(db)).Methods("PUT")
+	router.HandleFunc("/api/go/dashboards/{id}", deleteDashboard(db)).Methods("DELETE")
 
+	// Dashboard panes routes
+	router.HandleFunc("/api/go/dashboards/{dashboardId}/panes", addPaneToDashboard(db)).Methods("POST")
+	router.HandleFunc("/api/go/dashboards/{dashboardId}/panes/{apiId}", removePaneFromDashboard(db)).Methods("DELETE")
+
+	// wrap the router with CORS and JSON content type middlewares
 	enhancedRouter := enableCORS(jsonContentTypeMiddleware(router))
 
 	// start server
@@ -154,7 +163,6 @@ func enableCORS(next http.Handler) http.Handler {
 		// Pass down the request to the next middleware (or final handler)
 		next.ServeHTTP(w, r)
 	})
-
 }
 
 func jsonContentTypeMiddleware(next http.Handler) http.Handler {
@@ -206,15 +214,6 @@ func getUser(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(u)
 	}
 }
-
-/*
-type User struct {
-	Id       int    `json:"id"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Password string `json:"password,omitempty"`
-}
-*/
 
 // create user
 func createUser(db *sql.DB) http.HandlerFunc {
@@ -281,7 +280,6 @@ func deleteUser(db *sql.DB) http.HandlerFunc {
 			json.NewEncoder(w).Encode("User deleted")
 		}
 	}
-
 }
 
 func loginUser(db *sql.DB) http.HandlerFunc {
@@ -354,10 +352,9 @@ func createAPI(db *sql.DB) http.HandlerFunc {
 		input.APIId = apiId // Set the generated APIId
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(input)
-
 	}
-
 }
+
 func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract userId from the request URL
@@ -459,5 +456,298 @@ func getUserIdByEmail(db *sql.DB) http.HandlerFunc {
 		// Return the user ID as JSON
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]int{"userId": userId})
+	}
+}
+
+// Dashboard Handlers
+
+// Create a new dashboard
+func createDashboard(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var dashboard Dashboard
+		err := json.NewDecoder(r.Body).Decode(&dashboard)
+		if err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+		// Insert the dashboard into the database
+		var dashboardId int
+		err = db.QueryRow(
+			"INSERT INTO Dashboards (UserId, Name) VALUES ($1, $2) RETURNING DashboardId",
+			dashboard.UserId, dashboard.Name,
+		).Scan(&dashboardId)
+
+		if err != nil {
+			log.Printf("Error creating dashboard: %v", err)
+			http.Error(w, "Failed to create dashboard", http.StatusInternalServerError)
+			return
+		}
+
+		// Set the generated ID
+		dashboard.Id = dashboardId
+
+		// Return the created dashboard
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(dashboard)
+	}
+}
+
+// Get all dashboards for a user
+func getDashboardsByUserId(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		userId := vars["userId"]
+
+		// Query the database for dashboards with the given userId
+		rows, err := db.Query("SELECT DashboardId, UserId, Name FROM Dashboards WHERE UserId = $1", userId)
+		if err != nil {
+			log.Printf("Error querying dashboards: %v", err)
+			http.Error(w, "Failed to fetch dashboards", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		// Create a slice to hold the results
+		var dashboards []Dashboard
+
+		// Iterate over the rows and populate the slice
+		for rows.Next() {
+			var dashboard Dashboard
+
+			// Scan the dashboard row
+			err := rows.Scan(&dashboard.Id, &dashboard.UserId, &dashboard.Name)
+			if err != nil {
+				log.Printf("Error scanning dashboard row: %v", err)
+				http.Error(w, "Failed to fetch dashboards", http.StatusInternalServerError)
+				return
+			}
+
+			// Add the dashboard to the result slice
+			dashboards = append(dashboards, dashboard)
+		}
+
+		// Check for errors during dashboard iteration
+		if err := rows.Err(); err != nil {
+			log.Printf("Error iterating over dashboard rows: %v", err)
+			http.Error(w, "Failed to fetch dashboards", http.StatusInternalServerError)
+			return
+		}
+
+		// Return the results as JSON
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(dashboards)
+	}
+}
+
+// Get a specific dashboard by ID with its panes (APIs)
+func getDashboardById(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		dashboardId := vars["id"]
+
+		// Query the database for the dashboard
+		var dashboard Dashboard
+		err := db.QueryRow("SELECT DashboardId, UserId, Name FROM Dashboards WHERE DashboardId = $1", dashboardId).
+			Scan(&dashboard.Id, &dashboard.UserId, &dashboard.Name)
+
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "Dashboard not found", http.StatusNotFound)
+			} else {
+				log.Printf("Error querying dashboard: %v", err)
+				http.Error(w, "Failed to fetch dashboard", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		// Get all APIs associated with this dashboard through the DashboardPanes table
+		query := `
+			SELECT a.APIId, a.UserId, a.APIName, a.APIString, a.APIKey, a.GraphType, a.PaneX, a.PaneY 
+			FROM APIs a
+			JOIN DashboardPanes dp ON a.APIId = dp.APIId
+			WHERE dp.DashboardId = $1
+		`
+
+		rows, err := db.Query(query, dashboardId)
+		if err != nil {
+			log.Printf("Error querying dashboard panes: %v", err)
+			http.Error(w, "Failed to fetch dashboard panes", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		// Create a slice to hold the panes
+		var panes []API
+
+		// Iterate over the rows and populate the slice
+		for rows.Next() {
+			var pane API
+
+			// Scan the API row
+			err := rows.Scan(&pane.APIId, &pane.UserId, &pane.APIName, &pane.APIString, &pane.APIKey, &pane.GraphType, &pane.PaneX, &pane.PaneY)
+			if err != nil {
+				log.Printf("Error scanning API row: %v", err)
+				http.Error(w, "Failed to fetch dashboard panes", http.StatusInternalServerError)
+				return
+			}
+
+			// Get parameters for this API
+			paramRows, err := db.Query("SELECT Parameter FROM Parameters WHERE APIId = $1", pane.APIId)
+			if err != nil {
+				log.Printf("Error querying parameters for APIId %d: %v", pane.APIId, err)
+				http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+				return
+			}
+			defer paramRows.Close()
+
+			// Create a slice to hold the parameters
+			var parameters []Parameter
+
+			// Iterate over the parameter rows and populate the slice
+			for paramRows.Next() {
+				var param Parameter
+				err := paramRows.Scan(&param.Parameter)
+				if err != nil {
+					log.Printf("Error scanning parameter row: %v", err)
+					http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+					return
+				}
+
+				parameters = append(parameters, param)
+			}
+
+			// Check for errors during parameter iteration
+			if err := paramRows.Err(); err != nil {
+				log.Printf("Error iterating over parameter rows: %v", err)
+				http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+				return
+			}
+
+			// Assign the parameters to the API struct
+			pane.Parameters = parameters
+
+			// Add the pane to the result slice
+			panes = append(panes, pane)
+		}
+
+		// Assign the panes to the dashboard
+		dashboard.Panes = panes
+
+		// Return the dashboard with its panes
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(dashboard)
+	}
+}
+
+// Update a dashboard
+func updateDashboard(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		dashboardId := vars["id"]
+
+		var dashboard Dashboard
+		err := json.NewDecoder(r.Body).Decode(&dashboard)
+		if err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+		// Update the dashboard in the database
+		_, err = db.Exec(
+			"UPDATE Dashboards SET Name = $1 WHERE DashboardId = $2",
+			dashboard.Name, dashboardId,
+		)
+
+		if err != nil {
+			log.Printf("Error updating dashboard: %v", err)
+			http.Error(w, "Failed to update dashboard", http.StatusInternalServerError)
+			return
+		}
+
+		// Return the updated dashboard
+		dashboard.Id, _ = strconv.Atoi(dashboardId)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(dashboard)
+	}
+}
+
+// Delete a dashboard
+func deleteDashboard(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		dashboardId := vars["id"]
+
+		// Delete the dashboard from the database
+		_, err := db.Exec("DELETE FROM Dashboards WHERE DashboardId = $1", dashboardId)
+		if err != nil {
+			log.Printf("Error deleting dashboard: %v", err)
+			http.Error(w, "Failed to delete dashboard", http.StatusInternalServerError)
+			return
+		}
+
+		// Return success message
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "Dashboard deleted successfully"})
+	}
+}
+
+// Add a pane (API) to a dashboard
+func addPaneToDashboard(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		dashboardId := vars["dashboardId"]
+
+		type PaneRequest struct {
+			APIId int `json:"apiId"`
+		}
+
+		var paneReq PaneRequest
+		err := json.NewDecoder(r.Body).Decode(&paneReq)
+		if err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+		// Insert into the DashboardPanes mapping table
+		_, err = db.Exec(
+			"INSERT INTO DashboardPanes (DashboardId, APIId) VALUES ($1, $2)",
+			dashboardId, paneReq.APIId,
+		)
+
+		if err != nil {
+			log.Printf("Error adding pane to dashboard: %v", err)
+			http.Error(w, "Failed to add pane to dashboard", http.StatusInternalServerError)
+			return
+		}
+
+		// Return success message
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "Pane added to dashboard successfully"})
+	}
+}
+
+// Remove a pane (API) from a dashboard
+func removePaneFromDashboard(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		dashboardId := vars["dashboardId"]
+		apiId := vars["apiId"]
+
+		// Delete the entry from the DashboardPanes mapping table
+		_, err := db.Exec(
+			"DELETE FROM DashboardPanes WHERE DashboardId = $1 AND APIId = $2",
+			dashboardId, apiId,
+		)
+
+		if err != nil {
+			log.Printf("Error removing pane from dashboard: %v", err)
+			http.Error(w, "Failed to remove pane from dashboard", http.StatusInternalServerError)
+			return
+		}
+
+		// Return success message
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "Pane removed from dashboard successfully"})
 	}
 }
