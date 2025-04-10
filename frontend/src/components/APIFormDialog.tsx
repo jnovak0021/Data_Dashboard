@@ -1,6 +1,5 @@
-
-
 import { useState } from 'react';
+import { useRouter } from 'next/router';
 import { CiCirclePlus, CiCircleMinus  } from "react-icons/ci";
 import { fetchUserId } from "../../utils/auth";
 
@@ -15,11 +14,15 @@ interface APIData {
   paneY: number;
   parameters: (string | { parameter: string })[] | null;
 }
+
 interface APIFormDialogProps {
     onFormSubmit: () => void; // Callback to notify parent about form submission
 }
 
 export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
+  const router = useRouter();
+  const { id: dashboardId } = router.query;
+  
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<APIData>>({
     graphType: 'line',
@@ -30,7 +33,6 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
   const [newParameter, setNewParameter] = useState('');
   const [jsonString, setJsonString] = useState('');
   const apiUrl = process.env.BACKEND_URL;
-
 
   const createAPI = async (jsonString: string) => {
     try {
@@ -46,11 +48,32 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
   
       const data = await res.json();
       console.log('API POST Response:', data);
+      return data;
     } catch (error) {
       console.error('Error creating API:', error);
+      throw error;
     }
   };
 
+  // Function to add API to dashboard
+  const addAPIToDashboard = async (dashboardId: string, apiId: number) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiId }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to add API to dashboard: ${res.statusText}`);
+      }
+
+      return await res.json();
+    } catch (error) {
+      console.error('Error adding API to dashboard:', error);
+      throw error;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,13 +106,26 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
       const jsonString = JSON.stringify(updatedFormData);
 
       // Call the createAPI function to send the data to the backend
-      await createAPI(jsonString);
+      const createdAPI = await createAPI(jsonString);
+      
+      // If we're on a dashboard page, add this API to the dashboard
+      if (dashboardId && typeof dashboardId === 'string' && createdAPI && createdAPI.apiId) {
+        await addAPIToDashboard(dashboardId, createdAPI.apiId);
+      }
 
       // Notify the parent component about the form submission
       onFormSubmit();
 
       // Close the dialog
       setIsOpen(false);
+      
+      // Reset form data
+      setFormData({
+        graphType: 'line',
+        paneX: 300,
+        paneY: 300,
+        parameters: []
+      });
     } catch (error) {
       console.error('Error submitting form:', error);
     }

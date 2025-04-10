@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import DashboardPane from './DashboardPane';
 import { fetchUserId } from "../../utils/auth";
@@ -34,6 +35,9 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
+  const router = useRouter();
+  const { id: dashboardId } = router.query;
+  
   const [apis, setApis] = useState<APIData[]>([]);
   const [apiData, setApiData] = useState<{ apiId: number; data: any }[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -41,34 +45,48 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   const [userId, setUserId] = useState(0);
   const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>(() => {
     // Try to load saved layouts from localStorage
-    if (typeof window !== 'undefined') {
-      const savedLayouts = localStorage.getItem('dashboardLayouts');
+    if (typeof window !== 'undefined' && dashboardId) {
+      const layoutKey = `dashboardLayout_${dashboardId}`;
+      const savedLayouts = localStorage.getItem(layoutKey);
       return savedLayouts ? JSON.parse(savedLayouts) : { lg: [], md: [], sm: [], xs: [] };
     }
     return { lg: [], md: [], sm: [], xs: [] };
   });
 
-  // Fetch the list of APIs
+  // Fetch the list of APIs based on dashboard ID
   useEffect(() => {
     const fetchAPIs = async () => {
+      // Only proceed if we have a dashboard ID
+      if (!dashboardId) {
+        // If on the home page or dashboard index page, we might not have a specific dashboard
+        // You could either leave loading as true, show a message, or handle differently
+        setLoading(false);
+        return;
+      }
+      
       try {
+        setLoading(true);
         const fetchedUserId = await fetchUserId();
         if (fetchedUserId === null) {
           throw new Error('Failed to fetch user ID');
         }
         setUserId(fetchedUserId);
 
-        const response = await fetch(`http://localhost:8000/api/go/apis/${fetchedUserId}`);
+        // Fetch dashboard details to get its panes
+        const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
         if (!response.ok) {
-          throw new Error(`Error fetching APIs: ${response.statusText}`);
+          throw new Error(`Error fetching dashboard: ${response.statusText}`);
         }
-        const data: APIData[] = await response.json();
-        console.log('Fetched APIs:', data);
-        setApis(data);
+        
+        const dashboardData = await response.json();
+        const apiList = dashboardData.panes || [];
+        
+        console.log('Fetched APIs for dashboard:', apiList);
+        setApis(apiList);
         
         // Generate layout if no saved layout exists or if APIs have changed
-        if (!layouts.lg.length || layouts.lg.length !== data.length) {
-          generateInitialLayout(data);
+        if (!layouts.lg.length || layouts.lg.length !== apiList.length) {
+          generateInitialLayout(apiList);
         }
       } catch (err: any) {
         setError(err.message);
@@ -78,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
     };
     
     fetchAPIs();
-  }, [refresh]);
+  }, [refresh, dashboardId]);
 
   // Fetch data for each API
   useEffect(() => {
@@ -113,10 +131,11 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
 
   // Save layouts to localStorage whenever they change
   useEffect(() => {
-    if (typeof window !== 'undefined' && layouts.lg.length > 0) {
-      localStorage.setItem('dashboardLayouts', JSON.stringify(layouts));
+    if (typeof window !== 'undefined' && layouts.lg.length > 0 && dashboardId) {
+      const layoutKey = `dashboardLayout_${dashboardId}`;
+      localStorage.setItem(layoutKey, JSON.stringify(layouts));
     }
-  }, [layouts]);
+  }, [layouts, dashboardId]);
 
   // Generate initial layout based on APIs
   const generateInitialLayout = (apiList: APIData[]) => {
@@ -181,12 +200,27 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   };
 
   // Handle pane deletion
-  const handleDeletePane = (apiId: number) => {
+  const handleDeletePane = async (apiId: number) => {
     if (!confirm(`Are you sure you want to delete this pane?`)) {
       return;
     }
     
     console.log(`Deleting pane with ID: ${apiId}`);
+    
+    // Remove the association between dashboard and API if we have a dashboard ID
+    if (dashboardId) {
+      try {
+        const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes/${apiId}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to remove pane from dashboard: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error('Error removing pane from dashboard:', error);
+      }
+    }
     
     // Update APIs state - remove the deleted API
     setApis(prevApis => prevApis.filter(api => api.apiId !== apiId));
@@ -209,8 +243,6 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
       
       return newLayouts;
     });
-         
-    //deleteAPIFromBackend(apiId);
   };
   
   if (loading) {
@@ -219,6 +251,10 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
 
   if (error) {
     return <div className="text-red-500 p-4">Error: {error}</div>;
+  }
+  
+  if (!dashboardId) {
+    return <div className="text-center p-4">No dashboard selected</div>;
   }
 
   return (

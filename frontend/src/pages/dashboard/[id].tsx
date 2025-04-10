@@ -2,7 +2,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import Dashboard from '@/components/Dashboard';
-import { getUserSession } from '../../utils/auth';
+import { getUserSession } from '../../../utils/auth';
 import APIFormDialog from '@/components/APIFormDialog';
 
 const DashboardPage = () => {
@@ -11,6 +11,7 @@ const DashboardPage = () => {
   const [dashboardTitle, setDashboardTitle] = useState('Loading...');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [refreshDashboard, setRefreshDashboard] = useState(false);
+  const [dashboardId, setDashboardId] = useState<string | null>(null);
 
   useEffect(() => {
     // Check user session
@@ -23,9 +24,10 @@ const DashboardPage = () => {
       return;
     }
 
-    // Fetch dashboard name when id is available
-    if (id) {
-      fetchDashboardDetails(id.toString());
+    // Set dashboard ID when available from router
+    if (id && typeof id === 'string') {
+      setDashboardId(id);
+      fetchDashboardDetails(id);
     }
   }, [id, router]);
 
@@ -64,8 +66,7 @@ const DashboardPage = () => {
         </div>
         
         <div className="bg-white shadow-lg rounded-lg p-0">
-          {/* Use the Dashboard component with refresh prop, no need for dashboardId prop */}
-          <Dashboard refresh={refreshDashboard} />
+          {dashboardId && <Dashboard refresh={refreshDashboard} />}
         </div>
       </div>
     </DashboardLayout>

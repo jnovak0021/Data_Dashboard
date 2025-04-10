@@ -130,7 +130,7 @@ func main() {
 	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET")
 
 	// Dashboard routes
-	router.HandleFunc("/api/go/dashboards", createDashboard(db)).Methods("POST")
+	router.HandleFunc("/api/go/createDashboard", createDashboard(db)).Methods("POST")
 	router.HandleFunc("/api/go/dashboards/user/{userId}", getDashboardsByUserId(db)).Methods("GET")
 	router.HandleFunc("/api/go/dashboards/{id}", getDashboardById(db)).Methods("GET")
 	router.HandleFunc("/api/go/dashboards/{id}", updateDashboard(db)).Methods("PUT")
