@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { fetchUserId } from '../../utils/auth'; // Assuming this utility correctly fetches the user ID
 import {
-  FaHome,
-  FaUser,
+  FaHome, 
   FaCog,
   FaSignOutAlt,
   FaTachometerAlt,
@@ -12,13 +11,48 @@ import {
   FaPlus,
   FaChevronLeft,
   FaBars,
-  FaSpinner // Added for loading state indication
+  FaSpinner, // Added for loading state indication
+  FaTrash // Added for delete functionality
 } from 'react-icons/fa';
 
 interface Dashboard {
   id: number; // Assuming ID is a number from the backend
   name: string;
 }
+
+interface DeleteConfirmationProps {
+  dashboardName: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+// Confirmation dialog component
+const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({ dashboardName, onConfirm, onCancel }) => {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-background/95 w-full max-w-[325px] rounded-lg shadow-lg border border-border/50 p-4">
+        <h3 className="text-lg font-medium text-white mb-2">Delete Dashboard</h3>
+        <p className="text-sm text-gray-300 mb-4">
+          Are you sure you want to delete {dashboardName}? This action cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 rounded-md border border-gray-600 bg-gray-800 hover:bg-gray-700 text-white text-sm transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface LeftSidebarProps {
   userEmail: string | null;
@@ -34,6 +68,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [isLoadingDashboards, setIsLoadingDashboards] = useState(false); // Loading state
   const [errorFetchingDashboards, setErrorFetchingDashboards] = useState<string | null>(null); // Error state
+  const [dashboardToDelete, setDashboardToDelete] = useState<Dashboard | null>(null); // Track dashboard to delete
 
   // Extract dashboardId from the current route to highlight the selected one
   useEffect(() => {
@@ -179,6 +214,47 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
     }
   };
 
+  // Handle showing the delete confirmation dialog
+  const handleDeleteClick = (e: React.MouseEvent, dashboard: Dashboard) => {
+    e.stopPropagation(); // Prevent dashboard selection when clicking delete icon
+    setDashboardToDelete(dashboard);
+  };
+
+  // Handle dashboard deletion
+  const handleDeleteDashboard = async () => {
+    if (!dashboardToDelete) return;
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardToDelete.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete dashboard: ${res.statusText}`);
+      }
+
+      console.log(`Dashboard ${dashboardToDelete.id} deleted successfully`);
+      
+      // If we're currently on the deleted dashboard, redirect to home
+      if (selectedDashboard === dashboardToDelete.id.toString()) {
+        router.push('/');
+      }
+      
+      // Clear the dashboard to delete and refresh the list
+      setDashboardToDelete(null);
+      refreshDashboards();
+    } catch (error) {
+      console.error('Error deleting dashboard:', error);
+      // Optionally: Show an error notification to the user
+    }
+  };
+
+  // Cancel delete operation
+  const handleCancelDelete = () => {
+    setDashboardToDelete(null);
+  };
+
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
     // If collapsing, ensure the dashboard sub-menu doesn't stay visually open
@@ -244,20 +320,6 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
             </a>
           </li>
 
-          {/* Profile */}
-          <li>
-            <a
-              onClick={() => handleRoute('/Profile')}
-              className={`flex items-center p-2 rounded-lg hover:bg-pink-700 cursor-pointer transition-colors ${
-                router.pathname === '/Profile' ? 'bg-pink-700 font-semibold' : ''
-              }`}
-               title={isCollapsed ? "Profile" : ""}
-           >
-              <FaUser className="text-xl flex-shrink-0" />
-              {!isCollapsed && <span className="ml-3 whitespace-nowrap">Profile</span>}
-            </a>
-          </li>
-
           {/* Settings */}
           <li>
             <a
@@ -316,15 +378,24 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
                 {/* Dashboard List */}
                 {!isLoadingDashboards && !errorFetchingDashboards && dashboards.map((dashboard) => (
                   <li key={dashboard.id}>
-                    <a
-                      onClick={() => handleDashboardSelect(dashboard.id)}
-                      className={`flex items-center p-1.5 pl-2 rounded-md hover:bg-pink-700 cursor-pointer text-sm transition-colors ${
-                        selectedDashboard === dashboard.id.toString() ? 'bg-pink-700 font-medium' : 'text-pink-100 hover:text-white'
-                      }`}
-                    >
-                      {/* Optional: Add a small icon per dashboard */}
-                      <span className="truncate" title={dashboard.name}>{dashboard.name}</span>
-                    </a>
+                    <div className="flex items-center">
+                      <a
+                        onClick={() => handleDashboardSelect(dashboard.id)}
+                        className={`flex-1 flex items-center p-1.5 pl-2 rounded-md hover:bg-pink-700 cursor-pointer text-sm transition-colors ${
+                          selectedDashboard === dashboard.id.toString() ? 'bg-pink-700 font-medium' : 'text-pink-100 hover:text-white'
+                        }`}
+                      >
+                        <span className="truncate" title={dashboard.name}>{dashboard.name}</span>
+                      </a>
+                      <button
+                        onClick={(e) => handleDeleteClick(e, dashboard)}
+                        className="p-1 text-gray-400 hover:text-red-500 transition-colors focus:outline-none ml-1"
+                        title="Delete dashboard"
+                        aria-label={`Delete ${dashboard.name}`}
+                      >
+                        <FaTrash size={12} />
+                      </button>
+                    </div>
                   </li>
                 ))}
 
@@ -363,6 +434,16 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
           {!isCollapsed && <span className="ml-3 whitespace-nowrap">Logout</span>}
         </a>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {dashboardToDelete && (
+         <DeleteConfirmation
+           dashboardName={dashboardToDelete.name}
+           onConfirm={handleDeleteDashboard}
+           onCancel={handleCancelDelete}
+         />
+        )
+      }
     </div>
   );
 };
