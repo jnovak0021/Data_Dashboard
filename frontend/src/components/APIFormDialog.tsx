@@ -395,7 +395,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className=" justify-end gap-2 pt-2">
             <button 
               type="button"
               onClick={() => setIsOpen(false)}
