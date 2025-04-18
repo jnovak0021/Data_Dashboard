@@ -12,6 +12,7 @@ interface HomePageProps {
 const HomePage: React.FC<HomePageProps> = ({ userEmail, onLogout }) => {
   const router = useRouter();
   const [refreshDashboard, setRefreshDashboard] = useState(false);
+  const [selectedDashboard, setSelectedDashboard] = useState(null);
 
   // Function to trigger a dashboard refresh
   const handleFormSubmit = () => {
