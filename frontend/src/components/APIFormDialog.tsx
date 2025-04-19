@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { CiCirclePlus, CiCircleMinus  } from "react-icons/ci";
 import { fetchUserId } from "../../utils/auth";
 import { APIPreview } from '@/components/APIPreview';
+import APIPreview2 from '@/components/APIPreview2';
 
 interface APIData {
   apiId: number;
@@ -343,7 +344,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                   </div>
                 </div>
               )}
-
+              {/*<APIPreview2 url={formData.apiString || ""} />*/}
               <APIPreview 
                 apiUrl={formData.apiString || ""}
                 isOpen={isModalOpen}

@@ -20,7 +20,7 @@ interface APIPreviewModalProps {
 }
 
 export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: APIPreviewModalProps) {
-  const [data, setData] = useState<any>(null);
+  const [structure, setStructure] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -28,19 +28,42 @@ export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: AP
 
   useEffect(() => {
     if (isOpen) {
-      fetchData();
+      fetchStructure();
     }
   }, [isOpen, apiUrl]);
 
-  const fetchData = async () => {
+  const fetchStructure = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await fetch(apiUrl);
+      const contentType = response.headers.get('content-type');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Response is not valid JSON');
+      }
+
       const json = await response.json();
-      setData(json);
+
+      const extractStructure = (obj: any): any => {
+        if (Array.isArray(obj)) {
+          return obj.length > 0 ? [extractStructure(obj[0])] : [];
+        } else if (typeof obj === 'object' && obj !== null) {
+          return Object.fromEntries(
+            Object.entries(obj).map(([key, value]) => [key, extractStructure(value)])
+          );
+        }
+        return null;
+      };
+
+      const structureOnly = extractStructure(json);
+      setStructure(structureOnly);
     } catch (err) {
-      setError('Failed to fetch data');
+      setError('Failed to fetch structure');
     } finally {
       setLoading(false);
     }
@@ -106,15 +129,11 @@ export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: AP
   };
 
   const handleSave = () => {
-    const flatNodes = flattenNodes(parseDataStructure(data));
+    const flatNodes = flattenNodes(parseDataStructure(structure));
     const selectedParameters = Array.from(selectedNodes)
-      .map(key => {
-        const node = flatNodes.find(n => n.key === key);
-        //return node?.key.split('.').pop();
-        return node?.key;
-      })
+      .map(key => flatNodes.find(n => n.key === key)?.key)
       .filter((param): param is string => param !== undefined);
-    
+
     onSelectedParameters(selectedParameters);
     onClose();
   };
@@ -132,19 +151,14 @@ export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: AP
         }}
         className="p-1 hover:bg-gray-600 rounded mr-1 flex items-center justify-center"
       >
-        {isExpanded ? (
-          <IoChevronDown className="w-4 h-4" />
-        ) : (
-          <IoChevronForward className="w-4 h-4" />
-        )}
+        {isExpanded ? <IoChevronDown className="w-4 h-4" /> : <IoChevronForward className="w-4 h-4" />}
       </button>
     );
   };
 
   const NodeContent = ({ node }: { node: DataNode }) => {
     const isSelected = selectedNodes.has(node.key);
-    const keyParts = node.key.split('.');
-    const displayKey = keyParts[keyParts.length - 1];
+    const displayKey = node.key.split('.').pop();
     const hasChildren = node.children && node.children.length > 0;
 
     return (
@@ -159,8 +173,8 @@ export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: AP
       >
         <span className="font-medium">{displayKey}</span>
         <span className="mx-1">:</span>
-        <span className={hasChildren ? 'italic' : ''}>
-          {hasChildren ? `(${node.type})` : String(node.value)}
+        <span className={hasChildren ? 'italic text-gray-400' : 'text-gray-500'}>
+          {hasChildren ? `(${node.type})` : 'null'}
         </span>
       </div>
     );
@@ -201,10 +215,7 @@ export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: AP
 
     const flatNodes = flattenNodes(dataStructure);
     const selectedElements = Array.from(selectedNodes)
-      .map(key => {
-        const node = flatNodes.find(n => n.key === key);
-        return node?.key.split('.').pop();
-      })
+      .map(key => flatNodes.find(n => n.key === key)?.key.split('.').pop())
       .filter(Boolean)
       .join(', ');
     
@@ -230,34 +241,30 @@ export function APIPreview({ apiUrl, isOpen, onClose, onSelectedParameters }: AP
         </div>
         
         <div className="overflow-y-auto max-h-[calc(90vh-4rem)]">
-          
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <AiOutlineLoading3Quarters className="w-8 h-8 animate-spin text-blue-500" />
-
             </div>
-            
           ) : error ? (
             <>
-              
               <div className="text-red-500 text-center py-12">{error}</div>
               <button
-                    onClick={onClose}
-                    className="px-4 py-2 bg-gray-700 text-center text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2"
-                  >
-                    <IoClose className="w-5 h-5" />
-                    Close
-                  </button>
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2"
+              >
+                <IoClose className="w-5 h-5" />
+                Close
+              </button>
             </>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-gray-700">
               <div className="p-4">
                 <div className="font-mono text-sm bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                  {parseDataStructure(data).map((node) => renderNode(node))}
+                  {parseDataStructure(structure).map((node) => renderNode(node))}
                 </div>
               </div>
               <div className="p-4 space-y-4">
-                {renderSelectedNodes(parseDataStructure(data))}
+                {renderSelectedNodes(parseDataStructure(structure))}
                 <div className="flex justify-end gap-2 pt-2">
                   <button
                     onClick={handleSave}
