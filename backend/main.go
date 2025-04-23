@@ -33,6 +33,7 @@ type API struct {
 	PaneX      int         `json:"paneX"`      // Corresponds to PaneX INT
 	PaneY      int         `json:"paneY"`      // Corresponds to PaneY INT
 	Parameters []Parameter `json:"parameters"` // Represents the many-to-one relationship
+	RootKey    string
 }
 
 type Parameter struct {
@@ -86,7 +87,7 @@ func main() {
 	log.Println("Created USERS")
 
 	//create apis table
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS APIs (APIId SERIAL PRIMARY KEY, UserId INT NOT NULL, APIName TEXT, APIString TEXT, APIKey TEXT, GraphType TEXT, PaneX INT, PaneY INT, CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS APIs (APIId SERIAL PRIMARY KEY, UserId INT NOT NULL, APIName TEXT, APIString TEXT, APIKey TEXT, GraphType TEXT, PaneX INT, PaneY INT, RootKey TEXT, CONSTRAINT fk_user FOREIGN KEY (UserId) REFERENCES users(id) ON DELETE CASCADE)")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -127,7 +128,6 @@ func main() {
 
 	// API routes
 	router.HandleFunc("/api/go/createAPI", createAPI(db)).Methods("POST")
-	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET")
 
 	//router to delete api from the db and casecade
 	router.HandleFunc("/api/go/deleteAPI/{index}", deleteAPI(db)).Methods("DELETE")
@@ -330,8 +330,8 @@ func createAPI(db *sql.DB) http.HandlerFunc {
 		var apiId int
 
 		err = db.QueryRow(
-			"INSERT INTO APIs (UserId, APIString, APIName, APIKey, GraphType, PaneX, PaneY) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING APIId",
-			input.UserId, input.APIString, input.APIName, input.APIKey, input.GraphType, input.PaneX, input.PaneY,
+			"INSERT INTO APIs (UserId, APIString, APIName, APIKey, GraphType, PaneX, PaneY, RootKey) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING APIId",
+			input.UserId, input.APIString, input.APIName, input.APIKey, input.GraphType, input.PaneX, input.PaneY, input.RootKey,
 		).Scan(&apiId)
 		log.Println(err)
 		if err != nil {
@@ -366,7 +366,7 @@ func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
 		userId := vars["userId"]
 
 		// Query the database for APIs with the given userId
-		rows, err := db.Query("SELECT APIId, UserId, APIName, APIString, APIKey, GraphType, PaneX, PaneY FROM APIs WHERE UserId = $1", userId)
+		rows, err := db.Query("SELECT APIId, UserId, APIName, APIString, APIKey, GraphType, PaneX, PaneY, RootKey, FROM APIs WHERE UserId = $1", userId)
 		if err != nil {
 			log.Printf("Error querying APIs: %v", err)
 			http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
