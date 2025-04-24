@@ -18,6 +18,7 @@ interface APIData {
   paneX: number;
   paneY: number;
   parameters: (string | { parameter: string })[] | null;
+  rootKey: string;
 }
 
 interface Layout {
@@ -287,6 +288,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
                 parameters={api.parameters?.map((p) => (typeof p === 'object' && 'parameter' in p ? p.parameter : p)) || []}
                 apiData={apiSpecificData}
                 onDelete={handleDeletePane}
+                rootKey = {api.rootKey}
               />
             </div>
           );

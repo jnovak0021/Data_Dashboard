@@ -1,23 +1,55 @@
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ZAxis } from 'recharts';
+import React from 'react';
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ZAxis, Cell } from 'recharts';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+// Consistent color palette across all graph types
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ff5252', '#43a047'];
 
-const ScatterPlot: React.FC<{ data: any, sizeX: number, sizeY: number, parameters: string[] }> = ({ data, sizeX, sizeY, parameters }) => {
-  if (!data || data.length === 0) return <p>No data available</p>;
+interface ScatterPlotProps {
+  data: Record<string, any>[];
+  sizeX: number;
+  sizeY: number;
+  parameters: string[];
+}
 
-  // Extract relevant data based on parameters
-  const chartData = parameters.map((param, index) => {
-    const value = data.find((d: any) => d.Parameter === param.toUpperCase())?.AQI || 0;
-    // Add a small random offset to x for visualization purposes
-    // Using index as a seed for deterministic positioning
-    return { 
-      x: index + 1,  // Use index + 1 as x value for better visualization
-      y: value, 
-      z: 200,  // Size of the dot
-      name: param.toUpperCase(),
-      fill: COLORS[index % COLORS.length]
+const ScatterPlot: React.FC<ScatterPlotProps> = ({ data, sizeX, sizeY, parameters }) => {
+  if (!data || data.length === 0) return <div>No data available</div>;
+
+  // Use first two parameters for coordinates and third for size (optional)
+  const [xParam, yParam, sizeParam] = parameters;
+  const xKey = xParam?.split('.').pop() || '';
+  const yKey = yParam?.split('.').pop() || '';
+  const sizeKey = sizeParam?.split('.').pop();
+
+  // Format data for the chart
+  const chartData = data.map((item, index) => {
+    const point: any = {
+      x: Number(item[xKey]) || 0,
+      y: Number(item[yKey]) || 0,
+      name: item.name || `Point ${index + 1}`,
+      color: COLORS[index % COLORS.length]
     };
+
+    if (sizeKey) {
+      point.z = Number(item[sizeKey]) || 1;
+    }
+
+    return point;
   });
+
+  // Calculate nice axis domains with padding
+  const xValues = chartData.map(item => item.x);
+  const yValues = chartData.map(item => item.y);
+  
+  const minX = Math.min(...xValues);
+  const maxX = Math.max(...xValues);
+  const xPadding = (maxX - minX) * 0.1 || 1;
+  
+  const minY = Math.min(...yValues);
+  const maxY = Math.max(...yValues);
+  const yPadding = (maxY - minY) * 0.1 || 1;
+  
+  const xDomain = [minX - xPadding, maxX + xPadding];
+  const yDomain = [minY - yPadding, maxY + yPadding];
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -33,42 +65,57 @@ const ScatterPlot: React.FC<{ data: any, sizeX: number, sizeY: number, parameter
         <XAxis 
           type="number" 
           dataKey="x" 
-          name="Parameter" 
-          tickFormatter={(value) => {
-            const param = parameters[value - 1];
-            return param ? param.toUpperCase() : '';
-          }}
-          domain={[0.5, parameters.length + 0.5]}
+          name={xKey}
+          domain={xDomain}
+          label={{ value: xKey, position: 'insideBottom', offset: -10 }}
         />
-        <YAxis type="number" dataKey="y" name="Value" />
-        <ZAxis type="number" dataKey="z" range={[60, 400]} />
+        <YAxis 
+          type="number" 
+          dataKey="y" 
+          name={yKey}
+          domain={yDomain}
+          label={{ value: yKey, angle: -90, position: 'insideLeft' }}
+        />
+        {sizeKey && (
+          <ZAxis 
+            type="number" 
+            dataKey="z" 
+            range={[40, 200]} 
+            name={sizeKey}
+          />
+        )}
         <Tooltip 
           cursor={{ strokeDasharray: '3 3' }}
           formatter={(value, name, props) => {
-            if (name === 'y') return [value, 'Value'];
-            if (name === 'x') {
-              const param = parameters[props.payload.x - 1];
-              return [param ? param.toUpperCase() : '', 'Parameter'];
-            }
+            if (name === 'x') return [value, xKey];
+            if (name === 'y') return [value, yKey];
+            if (name === 'z') return [value, sizeKey];
             return [value, name];
+          }}
+          contentStyle={{
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderRadius: '4px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+            padding: '8px 12px',
           }}
         />
         <Legend
           layout="horizontal"
-          verticalAlign="bottom"
+          verticalAlign="top"
           align="center"
           wrapperStyle={{
-            paddingTop: '20px',
-            bottom: 10,
-            width: '100%'
+            paddingBottom: '20px'
           }}
         />
         <Scatter 
-          name="Parameters" 
-          data={chartData} 
+          name={`${xKey} vs ${yKey}`}
+          data={chartData}
           fill="#8884d8"
-          shape="circle"
-        />
+        >
+          {chartData.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={entry.color} />
+          ))}
+        </Scatter>
       </ScatterChart>
     </ResponsiveContainer>
   );
