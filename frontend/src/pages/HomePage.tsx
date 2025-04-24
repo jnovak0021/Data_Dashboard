@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import DashboardLayout from '@/components/DashboardLayout';
 import Dashboard from '@/components/Dashboard';
 import APIFormDialog from '@/components/APIFormDialog';
-import { useDashboard } from '../../utils/dashboard-context';
 
 interface HomePageProps {
   userEmail: string | null;
@@ -12,8 +11,7 @@ interface HomePageProps {
 
 const HomePage = ({ userEmail, onLogout }: HomePageProps) => {
   const router = useRouter();
-  const [refreshDashboard, setRefreshDashboard] = useState(false);
-  const { selectedDashboard } = useDashboard();
+  const [refreshDashboard, setRefreshDashboard] = useState(false);  
 
   const handleFormSubmit = () => {
     setRefreshDashboard(prev => !prev);
