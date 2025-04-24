@@ -4,6 +4,7 @@ import DashboardLayout from '@/components/DashboardLayout';
 import Dashboard from '@/components/Dashboard';
 import { getUserSession } from '../../../utils/auth';
 import APIFormDialog from '@/components/APIFormDialog';
+import { DashboardProvider } from '../../../utils/dashboard-context';
 
 const DashboardPage = () => {
   const router = useRouter();
@@ -58,18 +59,20 @@ const DashboardPage = () => {
   };
 
   return (
-    <DashboardLayout userEmail={userEmail} onLogout={handleLogout}>
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">{dashboardTitle}</h1>
-          <APIFormDialog onFormSubmit={handleFormSubmit} />
+    <DashboardProvider>
+      <DashboardLayout userEmail={userEmail} onLogout={handleLogout}>
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">{dashboardTitle}</h1>
+            <APIFormDialog onFormSubmit={handleFormSubmit} />
+          </div>
+          
+          <div className="bg-white shadow-lg rounded-lg p-0">
+            {dashboardId && <Dashboard refresh={refreshDashboard} />}
+          </div>
         </div>
-        
-        <div className="bg-white shadow-lg rounded-lg p-0">
-          {dashboardId && <Dashboard refresh={refreshDashboard} />}
-        </div>
-      </div>
-    </DashboardLayout>
+      </DashboardLayout>
+    </DashboardProvider>
   );
 };
 
