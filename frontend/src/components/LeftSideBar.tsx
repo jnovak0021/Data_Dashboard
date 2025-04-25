@@ -12,6 +12,7 @@ import {
   FaChevronLeft,
   FaBars,
   FaSpinner, // Added for loading state indication
+  FaShoppingCart,
   FaTrash // Added for delete functionality
 } from 'react-icons/fa';
 
@@ -415,6 +416,15 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
                   >
                     <FaPlus className="text-sm mr-2 flex-shrink-0" />
                     <span className="text-sm whitespace-nowrap">Create New Dashboard</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                  className="flex items-center w-full p-2 rounded-lg hover:bg-pink-700 cursor-pointer text-pink-200 hover:text-white transition-colors focus:outline-none focus:ring-1 focus:ring-pink-400"
+                  >
+                    <FaShoppingCart className="text-sm mr-2 flex-shrink-0" />
+                    <span className="text-sm whitespace-nowrap">Dashboard Shop</span>
+
                   </button>
                 </li>
               </ul>
