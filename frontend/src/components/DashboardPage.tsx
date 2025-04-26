@@ -13,23 +13,19 @@ const DashboardPage = () => {
   const [refreshDashboard, setRefreshDashboard] = useState(false);
 
   useEffect(() => {
-    // Check user session
     const session = getUserSession();
     if (session && session.isLoggedIn) {
       setUserEmail(session.email);
     } else {
-      // Redirect to login if not logged in
       router.push('/');
       return;
     }
 
-    // Fetch dashboard name when id is available
     if (id) {
       fetchDashboardDetails(id.toString());
     }
   }, [id, router]);
 
-  // Fetch dashboard details
   const fetchDashboardDetails = async (dashboardId: string) => {
     try {
       const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
@@ -46,11 +42,9 @@ const DashboardPage = () => {
   };
 
   const handleLogout = () => {
-    // Redirect to the main page which handles logout
     router.push('/');
   };
 
-  // Function to trigger dashboard refresh
   const handleFormSubmit = () => {
     setRefreshDashboard(prev => !prev);
   };
@@ -58,14 +52,11 @@ const DashboardPage = () => {
   return (
     <DashboardLayout userEmail={userEmail} onLogout={handleLogout}>
       <div className="p-6">
-
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">{dashboardTitle}</h1>
           <APIFormDialog onFormSubmit={handleFormSubmit} />
         </div>
-        
         <div className="bg-white shadow-lg rounded-lg p-0">
-          {/* Use the Dashboard component with refresh prop, no need for dashboardId prop */}
           <Dashboard refresh={refreshDashboard} />
         </div>
       </div>

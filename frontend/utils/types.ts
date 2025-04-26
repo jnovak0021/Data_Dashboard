@@ -1,0 +1,18 @@
+export interface DashboardType {
+    id: number; // Assuming ID is a number from the backend
+    name: string;
+    apis: APIData[];
+};
+
+export interface APIData {
+    apiId: number;
+    userId: number;
+    apiName: string;
+    apiString: string;
+    apiKey: string;
+    graphType: string;
+    paneX: number;
+    paneY: number;
+    parameters: (string | { parameter: string })[] | null;
+    rootKey?: string;
+};
