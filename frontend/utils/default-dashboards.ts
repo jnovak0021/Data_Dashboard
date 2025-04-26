@@ -9,11 +9,11 @@ export const FinanceDashboard: DashboardType = {
             apiName: "sdas",
             apiString: "sdas",
             apiKey: "aasd",
-            graphType: "dss",
+            graphType: "Line",
             paneX: 123,
             paneY: 123,
             parameters: null
-        }
+        }        
     ]
 };
 
