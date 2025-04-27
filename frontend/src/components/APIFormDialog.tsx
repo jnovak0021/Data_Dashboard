@@ -4,19 +4,7 @@ import { CiCirclePlus, CiCircleMinus } from "react-icons/ci";
 import { fetchUserId } from "../../utils/auth";
 import { APIPreview } from '@/components/APIPreview';
 import FormToolTip from '@/components/FormToolTip';
-
-interface APIData {
-  apiId: number;
-  userId: number;
-  apiName: string;
-  apiString: string;
-  apiKey: string;
-  graphType: string;
-  paneX: number;
-  paneY: number;
-  parameters: (string | { parameter: string })[] | null;
-  rootKey?: string;
-}
+import { APIData } from '../../utils/types';
 
 interface APIFormDialogProps {
   onFormSubmit: () => void;

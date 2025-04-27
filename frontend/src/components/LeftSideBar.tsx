@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useDashboard } from '../../utils/dashboard-context';
 import { fetchUserId } from '../../utils/auth';
 import {
-  FaHome,
-  FaCog,
+  FaHome,  
   FaSignOutAlt,
   FaTachometerAlt,
   FaChevronRight,
@@ -256,19 +255,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
               <FaHome className="text-xl flex-shrink-0" />
               {!isCollapsed && <span className="ml-3 whitespace-nowrap">Home</span>}
             </a>
-          </li>
-          <li>
-            <a
-              onClick={() => handleRoute('/Settings')}
-              className={`flex items-center p-2 rounded-lg hover:bg-pink-700 cursor-pointer transition-colors ${
-                router.pathname === '/Settings' ? 'bg-pink-700 font-semibold' : ''
-              }`}
-              title={isCollapsed ? 'Settings' : ''}
-            >
-              <FaCog className="text-xl flex-shrink-0" />
-              {!isCollapsed && <span className="ml-3 whitespace-nowrap">Settings</span>}
-            </a>
-          </li>
+          </li>          
           <li>
             <div
               className={`flex items-center justify-between p-2 rounded-lg hover:bg-pink-700 cursor-pointer transition-colors ${
