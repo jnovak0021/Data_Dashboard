@@ -14,8 +14,10 @@ import {
   FaBars,
   FaSpinner,
   FaTrash,
+  FaShoppingCart
 } from 'react-icons/fa';
 import { DashboardType } from '../../utils/types';
+import DashboardShop from './DashboardShop';
 
 interface DeleteConfirmationProps {
   dashboardName: string;
@@ -65,6 +67,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
   const [isLoadingDashboards, setIsLoadingDashboards] = useState(false);
   const [errorFetchingDashboards, setErrorFetchingDashboards] = useState<string | null>(null);
   const [dashboardToDelete, setDashboardToDelete] = useState<DashboardType | null>(null);
+  const [isShopOpen, setShopOpen] = useState(false);
 
   // Fetch dashboards
   useEffect(() => {
@@ -252,7 +255,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
               }`}
               title={isCollapsed ? 'Home' : ''}
             >
-              <FaHome className="text-xl flex-shrink-0" />
+              <FaHome className="text-xl flex-shrink-0 ml-1.5" />
               {!isCollapsed && <span className="ml-3 whitespace-nowrap">Home</span>}
             </a>
           </li>          
@@ -267,7 +270,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
               aria-expanded={!isCollapsed && isDashboardOpen}
             >
               <div className="flex items-center">
-                <FaTachometerAlt className="text-xl flex-shrink-0" />
+                <FaTachometerAlt className="text-xl flex-shrink-0 ml-1.5" />
                 {!isCollapsed && <span className="ml-3 whitespace-nowrap">Dashboards</span>}
               </div>
               {!isCollapsed && (
@@ -330,6 +333,16 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
               </ul>
             )}
           </li>
+          <li>
+            <a
+              onClick={() => setShopOpen(prev => !prev)}
+              className={`flex items-center p-2 rounded-lg hover:bg-pink-700 cursor-pointer transition-colors`}
+              title={isCollapsed ? 'Dashboard Shop' : ''}
+            >
+              <FaShoppingCart className="text-xl flex-shrink-0 ml-1" />
+              {!isCollapsed && <span className="ml-3 whitespace-nowrap">Dashboard Shop</span>}
+            </a>
+          </li>  
         </ul>
       </nav>
 
@@ -339,7 +352,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
           className="flex items-center p-2 rounded-lg hover:bg-pink-700 cursor-pointer transition-colors"
           title={isCollapsed ? 'Logout' : ''}
         >
-          <FaSignOutAlt className="text-xl flex-shrink-0" />
+          <FaSignOutAlt className="text-xl flex-shrink-0 ml-1" />
           {!isCollapsed && <span className="ml-3 whitespace-nowrap">Logout</span>}
         </a>
       </div>
@@ -349,6 +362,11 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
           dashboardName={dashboardToDelete.name}
           onConfirm={handleDeleteDashboard}
           onCancel={handleCancelDelete}
+        />
+      )}
+      {isShopOpen && (
+        <DashboardShop 
+          onClose={() => setShopOpen(prev => !prev)}
         />
       )}
     </div>

@@ -17,6 +17,42 @@ export const FinanceDashboard: DashboardType = {
     ]
 };
 
+export const CyberDashboard: DashboardType = {
+    id: 1,
+    name: "Cybersecurity",
+    apis: [
+        {   apiId: 12323,
+            userId: 123,
+            apiName: "sdas",
+            apiString: "sdas",
+            apiKey: "aasd",
+            graphType: "Line",
+            paneX: 123,
+            paneY: 123,
+            parameters: null
+        }        
+    ]
+};
+
+export const GeoDashboard: DashboardType = {
+    id: 2,
+    name: "Geological",
+    apis: [
+        {   apiId: 12323,
+            userId: 123,
+            apiName: "sdas",
+            apiString: "sdas",
+            apiKey: "aasd",
+            graphType: "Line",
+            paneX: 123,
+            paneY: 123,
+            parameters: null
+        }        
+    ]
+};
+
+
+
 // apiId: number;
 // userId: number;
 // apiName: string;
