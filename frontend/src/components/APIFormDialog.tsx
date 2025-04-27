@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { CiCirclePlus, CiCircleMinus  } from "react-icons/ci";
+import { CiCirclePlus, CiCircleMinus } from "react-icons/ci";
 import { fetchUserId } from "../../utils/auth";
 import { APIPreview } from '@/components/APIPreview';
-import  FormToolTip  from '@/components/FormToolTip'
+import FormToolTip from '@/components/FormToolTip';
 
 interface APIData {
   apiId: number;
@@ -25,7 +25,7 @@ interface APIFormDialogProps {
 export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
   const router = useRouter();
   const { id: dashboardId } = router.query;
-  
+
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<APIData>>({
     graphType: 'line',
@@ -56,7 +56,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
     console.log('Selected root key:', rootKey);
   };
 
-  const clearForm : Partial<APIData> = {
+  const clearForm: Partial<APIData> = {
     graphType: 'line',
     paneX: 300,
     paneY: 300,
@@ -95,8 +95,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
     url.searchParams.append(apiKeyParamName, apiKey);
     return url.toString();
   };
-  
-  // Function to add API to dashboard
+
   const addAPIToDashboard = async (dashboardId: string, apiId: number) => {
     try {
       const res = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes`, {
@@ -121,8 +120,9 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
     console.log("Form submission started");
 
     try {
-      if (!formData.apiName || !formData.apiString) {
-        console.error('Required fields missing');
+      if (!formData.apiName || !formData.apiString || !formData.parameters?.length) {
+        console.error('Required fields missing: apiName, apiString, or parameters');
+        alert("Please select at least one parameter before submitting.");
         return;
       }
 
@@ -131,7 +131,6 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
         throw new Error('Failed to fetch user ID');
       }
 
-      // Process API string with API key if needed
       const processedApiString = processApiString(
         formData.apiString,
         apiKeyParam,
@@ -147,33 +146,28 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
 
       const updatedFormData = {
         userId,
-        apiString: processedApiString, // Use the processed API string
+        apiString: processedApiString,
         apiName: formData.apiName,
         apiKey: formData.apiKey,
         graphType: formData.graphType,
         paneX: formData.paneX,
         paneY: formData.paneY,
         parameters: formattedParameters,
-        rootKey: formData.rootKey || '', // Include the root key in the submission
+        rootKey: formData.rootKey || '',
       };
 
       console.log("Submitting data:", updatedFormData);
       const jsonString = JSON.stringify(updatedFormData);
 
-      // Call the createAPI function to send the data to the backend
       const createdAPI = await createAPI(jsonString);
-      
-      // If we're on a dashboard page, add this API to the dashboard
+
       if (dashboardId && typeof dashboardId === 'string' && createdAPI && createdAPI.apiId) {
         await addAPIToDashboard(dashboardId, createdAPI.apiId);
       }
 
-      // Notify the parent component about the form submission
       onFormSubmit();
       setFormData(clearForm);
       setIsOpen(false);
-      
-      // Reset form data
       setFormData({
         graphType: 'line',
         paneX: 300,
@@ -185,7 +179,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
       console.error('Error submitting form:', error);
     }
   };
-
+  
   const addParameter = () => {
     if (newParameter.trim()) {
       setFormData(prev => ({
