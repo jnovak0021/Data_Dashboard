@@ -1,3 +1,9 @@
+export interface DashboardType {
+  id: number; // Assuming ID is a number from the backend
+  name: string;
+  apis: APIData[];
+};
+
 export interface APIData {
     id?: number;
     userId: string;
@@ -17,3 +23,4 @@ export interface APIData {
     key: string;
     path: string; // Full path to the root key (e.g., "node.NameA[0]" or "node.NameA[1]")
   }
+  
