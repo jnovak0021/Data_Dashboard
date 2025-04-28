@@ -18,7 +18,7 @@ interface APIData {
   paneX: number;
   paneY: number;
   parameters: string[] | null;
-  rootKeys: string[]; // Use string[] for rootKeys
+  rootKeys: string[]; // Expecting an array of strings like ["type", "features.0.properties"]
 }
 
 interface Layout {
@@ -38,7 +38,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   const router = useRouter();
   const { id: dashboardId } = router.query;
-  
+
   const [apis, setApis] = useState<APIData[]>([]);
   const [apiData, setApiData] = useState<{ apiId: number; data: any }[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -71,19 +71,14 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
 
         console.log('Fetched APIs for dashboard:', apiList);
 
-        if (!apiList || apiList.length === 0) {
-          console.warn('No panes found in dashboard data.');
-        }
-
+        // Process APIs and ensure rootKeys are in the expected format
         const processedApis = apiList.map((api: any) => {
-          console.log('Received rootKeys:', api.rootKeys);
-
-          // Extract the `path` field from each root key
+          // Ensure `rootKeys` is an array of strings
           const formattedRootKeys: string[] = Array.isArray(api.rootKeys)
-            ? api.rootKeys.map((keyObj: { path: string }) => keyObj.path)
+            ? api.rootKeys.map((key: any) => (typeof key === 'string' ? key : ''))
             : [];
 
-          console.log(`Processed rootKeys for API ${api.apiName} (${api.apiId}):`, formattedRootKeys);
+          console.log(`Processed Root Keys for API ${api.apiName} (${api.apiId}):`, formattedRootKeys);
 
           return {
             ...api,
@@ -111,23 +106,25 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
     const fetchAllApiData = async () => {
       if (apis.length > 0) {
         try {
-          const results = await Promise.all(apis.map(async (api) => {
-            console.log(`Fetching data for API ${api.apiName} (${api.apiId}) from ${api.apiString}`);
-            
-            try {
-              const response = await fetch(api.apiString);
-              if (!response.ok) {
-                throw new Error(`Error fetching data for API ${api.apiId}: ${response.statusText}`);
+          const results = await Promise.all(
+            apis.map(async (api) => {
+              console.log(`Fetching data for API ${api.apiName} (${api.apiId}) from ${api.apiString}`);
+              try {
+                const response = await fetch(api.apiString);
+                if (!response.ok) {
+                  throw new Error(`Error fetching data for API ${api.apiId}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                return { apiId: api.apiId, data };
+              } catch (err: any) {
+                console.error(`Error fetching data for API ${api.apiId}:`, err.message);
+                return { apiId: api.apiId, data: null };
               }
-              const data = await response.json();
-              return { apiId: api.apiId, data };
-            } catch (err: any) {
-              console.error(`Error fetching data for API ${api.apiId}:`, err.message);
-              return { apiId: api.apiId, data: null };
-            }
-          }));
+            })
+          );
 
           console.log('Fetched API data:', results);
+
           setApiData(results);
         } catch (err) {
           console.error('Error fetching API data:', err);
@@ -184,6 +181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
 
     setApis((prevApis) => prevApis.filter((api) => api.apiId !== apiId));
     setApiData((prevData) => prevData.filter((data) => data.apiId !== apiId));
+
     setLayouts((prevLayouts) => {
       const newLayouts = { ...prevLayouts };
       for (const breakpoint in newLayouts) {
@@ -215,7 +213,10 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         compactType="vertical"
       >
         {apis.map((api) => {
-          console.log(`Rendering pane for API ${api.apiName} (${api.apiId}): rootKeys =`, api.rootKeys);
+          console.log(
+            `Rendering pane for API ${api.apiName} (${api.apiId}):`,
+            apiData.find((data) => data.apiId === api.apiId)?.data
+          );
           return (
             <div key={api.apiId}>
               <DashboardPane

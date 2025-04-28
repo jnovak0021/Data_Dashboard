@@ -1,54 +1,57 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// Color palette for multiple lines
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00c49f'];
-
-interface LineGraphProps {
+interface GraphProps {
   data: Record<string, any>[];
   sizeX: number;
   sizeY: number;
   parameters: string[];
 }
-
-const LineGraph: React.FC<LineGraphProps> = ({ data, sizeX, sizeY, parameters }) => {
-  if (data.length > 0)
-    {
-      return <div><div>DATA: </div>{JSON.stringify(data)}</div>
-    }
-    
-  if (!data || data.length === 0) return <div>No data available<div><div>DATA: </div>{JSON.stringify(data)}</div></div>;
+const LineGraph: React.FC<GraphProps> = ({ data, parameters }) => {
+  if (!data || data.length === 0) return <div>No data available</div>;
   if (!parameters || parameters.length < 2) {
     return <div>Invalid parameters. Please provide at least two parameters.</div>;
   }
-  const getParameterName = (param: string | { parameter: string }) => {
+
+  const getParameterName = (param: string | { parameter: string }): string => {
     if (typeof param === 'string') return param;
     return param.parameter;
   };
   
-  // Extract x-axis parameter (first parameter) and all y-axis parameters (remaining parameters)
-  const [xParam, ...yParams] = parameters;
-const xKey = getParameterName(xParam)?.split('.').pop() || '';
-// Removed unused yKey as it references undefined yParam
+  const [xParam, ...yParams] = parameters.map(getParameterName);
 
-
-  // Function to get the actual value from potentially nested data
-  const getValue = (item: any, param: string): any => {
-    return param.split('.').reduce((obj, key) => (obj && obj[key] !== undefined ? obj[key] : undefined), item);
+  const getPathLastSegment = (path: string): string => {
+    const parts = path.split('.');
+    return parts[parts.length - 1];
   };
 
-  // Check if x values are timestamps/dates
+  const getDisplayName = (param: string): string => {
+    if (param.includes('.')) {
+      return getPathLastSegment(param);
+    }
+    return param;
+  };
+
+  const getValue = (item: Record<string, any>, param: string): any => {
+    if (item[param] !== undefined) {
+      return item[param];
+    }
+    
+    const paramName = getPathLastSegment(param);
+    const matchingKey = Object.keys(item).find(key => 
+      key.endsWith(`.${paramName}`) || key === paramName
+    );
+    
+    return matchingKey ? item[matchingKey] : undefined;
+  };
+
   const isTimeAxis = data.some(item => {
     const value = getValue(item, xParam);
     return (typeof value === 'string' && !isNaN(Date.parse(value))) ||
            (typeof value === 'number' && value > 1000000000);
   });
 
-  
-
-  
-
-  // Create a view-model for the chart while preserving original data
   const chartViewModel = data
     .map((item, index) => ({
       originalData: item,
@@ -59,6 +62,7 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
         value: getValue(item, param)
       }))
     }))
+    .filter(item => item.xValue !== undefined)
     .sort((a, b) => {
       if (isTimeAxis) {
         const aTime = typeof a.xValue === 'string' ? new Date(a.xValue).getTime() : a.xValue;
@@ -72,14 +76,12 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
       return (Number(a.xValue) || 0) - (Number(b.xValue) || 0);
     });
 
-  // Sample data if too many points while preserving original data
   let sampledViewModel = chartViewModel;
   if (chartViewModel.length > 20) {
     const step = Math.ceil(chartViewModel.length / 20);
     sampledViewModel = chartViewModel.filter((_, index) => index % step === 0);
   }
 
-  // Create the chart data format required by Recharts
   const chartData = sampledViewModel.map(item => {
     const point: Record<string, any> = {
       originalData: item.originalData,
@@ -89,13 +91,14 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
     };
 
     item.yValues.forEach(({ param, value }) => {
-      point[param] = Number(value) || 0;
+      const paramKey = getDisplayName(param);
+      point[paramKey] = Number(value) || 0;
+      point[`${paramKey}_fullPath`] = param;
     });
 
     return point;
   });
 
-  // Calculate Y axis domain across all y parameters
   const allYValues = sampledViewModel.flatMap(item => 
     item.yValues.map(y => y.value)
   ).map(v => Number(v) || 0);
@@ -105,17 +108,10 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
   const padding = (maxY - minY) * 0.1;
   const yDomain = [Math.max(0, minY - padding), maxY + padding];
 
-  // Get display names for parameters
-  const getDisplayName = (param: string): string => {
-    const parts = param.split('.');
-    return parts[parts.length - 1];
-  };
+  const displayParams = yParams.map(getDisplayName);
 
   return (
-    
     <ResponsiveContainer width="100%" height="100%">
-      <>
-      {JSON.stringify(data)}
       <LineChart
         data={chartData}
         margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
@@ -123,6 +119,7 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis 
           dataKey="x"
+          label={{ value: getDisplayName(xParam), position: 'insideBottomRight', offset: -10 }}
           angle={-30}
           textAnchor="end"
           height={60}
@@ -131,13 +128,10 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
         />
         <YAxis domain={yDomain} />
         <Tooltip 
-          formatter={(value, name, props) => {
-            const displayName = getDisplayName(String(name));
-            // Access original data in tooltip if needed
-            const originalData = props.payload.originalData;
-            return [value, displayName];
+          formatter={(value: any, name: string) => {
+            return [value, name];
           }}
-          labelFormatter={(label) => `${getDisplayName(xParam)}: ${label}`}
+          labelFormatter={(label: string) => `${getDisplayName(xParam)}: ${label}`}
           contentStyle={{
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             borderRadius: '4px',
@@ -146,18 +140,18 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
           }}
         />
         <Legend
-          formatter={(value) => getDisplayName(String(value))}
+          formatter={(value: string) => value}
           layout="horizontal"
           verticalAlign="top"
           align="center"
           wrapperStyle={{ paddingBottom: '20px' }}
         />
-        {yParams.map((param, index) => (
+        {displayParams.map((displayParam, index) => (
           <Line
-            key={param}
+            key={displayParam}
             type="monotone"
-            dataKey={param}
-            name={param}
+            dataKey={displayParam}
+            name={displayParam}
             stroke={COLORS[index % COLORS.length]}
             strokeWidth={2}
             dot={{ 
@@ -171,7 +165,6 @@ const xKey = getParameterName(xParam)?.split('.').pop() || '';
           />
         ))}
       </LineChart>
-      </>
     </ResponsiveContainer>
   );
 };

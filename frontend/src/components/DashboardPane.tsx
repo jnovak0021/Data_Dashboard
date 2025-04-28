@@ -9,23 +9,22 @@ import {
   extractDataByRootKey, 
   extractDataByMultipleRootKeys, 
   transformDataForVisualization, 
-  validateDataForVisualization 
+  validateDataForVisualization,
+  normalizeRootKeys
 } from '@/../utils/dataUtils';
 import APIFormDialog from './APIFormDialog';
-
 interface DashboardPaneProps {
   index: number;
   sizeX: number;
   sizeY: number;
   queryString: string;
   graphType: string;
-  parameters: string[];
+  parameters: (string | { parameter: string })[];
   apiData: any;
-  rootKeys: string[]; // Converted to plain string array (path values only)
+  rootKeys: string[];
   apiName?: string;
   onDelete?: (id: number) => void;
 }
-
 const DashboardPane: React.FC<DashboardPaneProps> = ({ 
   index, 
   sizeX, 
@@ -39,14 +38,14 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
   onDelete
 }) => {
   const [data, setData] = useState<Record<string, any>[] | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [stringParams,setStringParams] = useState<string[]>([]);
 
-  // Update dimensions when container size changes
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
@@ -55,16 +54,13 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       }
     };
 
-    // Initial dimensions
     updateDimensions();
 
-    // Update dimensions on resize
     const resizeObserver = new ResizeObserver(updateDimensions);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
 
-    // Update on window resize as well
     window.addEventListener('resize', updateDimensions);
 
     return () => {
@@ -73,57 +69,12 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
   }, []);
 
-  // Debug: Log root keys and parameters
-  useEffect(() => {
-    console.debug("Debug - Printing RootKeys (path values only):", rootKeys);
-    console.debug("Debug - Printing Parameters:", parameters);
-  }, [rootKeys, parameters]);
-
-  const extractDataByMultipleRootKeysPane = React.useCallback((data: any, rootKeys: string[]): Record<string, any> => {
-    if (!data || !rootKeys || rootKeys.length === 0) return {};
-    
-    const result: Record<string, any> = {};
-    for (const rootKey of rootKeys) {
-      result[rootKey] = extractDataByRootKeyPane(data, rootKey); // Use the string directly as a path
-    }
-    
-    return result;
-  }, []);
-  function extractDataByRootKeyPane(data: any, rootKey: string): any {
-    if (!data) return null;
-  
-    // If the rootKey is 'root' and the data is an array, return the data as is
-    if (rootKey === 'root' && Array.isArray(data)) {
-      return data;
-    }
-  
-    // Split the rootKey path into parts (handles dot notation and array indices)
-    const pathParts = rootKey.split(/[\[\].]/).filter(Boolean);
-    let result = data;
-  
-    for (const part of pathParts) {
-      if (result === null || result === undefined) return null;
-      const index = parseInt(part);
-  
-      // If the part is a numeric index and the result is an array, access the index
-      if (!isNaN(index) && Array.isArray(result)) {
-        result = result[index];
-      } else {
-        // Otherwise, access the property by key
-        result = result[part];
-      }
-    }
-  
-    return result;
-  }
-  // Process the API data or fetch from queryString
   useEffect(() => {
     const processApiData = async () => {
       try {
         setLoading(true);
         let jsonData = apiData;
 
-        // If no apiData provided but we have a queryString, fetch the data
         if (!jsonData && queryString) {
           try {
             const response = await fetch(queryString);
@@ -136,22 +87,24 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
           }
         }
 
-        // If still no data, show error
         if (!jsonData) {
           throw new Error("No data source provided");
         }
 
+        const formattedRootKeys = normalizeRootKeys(rootKeys);
+        
         let extractedData;
 
-        // Handle multiple root keys if available
-        if (rootKeys.length > 1) {
-          // Extract data using multiple root keys
-          extractedData = extractDataByMultipleRootKeysPane(jsonData, rootKeys);
-        } else if (rootKeys.length === 1) {
-          // Single root key
-          extractedData = extractDataByRootKeyPane(jsonData, rootKeys[0]);
+        if (formattedRootKeys.length > 1) {
+          extractedData = extractDataByMultipleRootKeys(jsonData, formattedRootKeys);
+        } else if (formattedRootKeys.length === 1) {
+          extractedData = extractDataByRootKey(jsonData, formattedRootKeys[0]);
+          
+          if (!extractedData && jsonData) {
+            extractedData = jsonData;
+            console.warn("Root key extraction failed, using entire JSON");
+          }
         } else {
-          // No root keys, use entire JSON
           extractedData = jsonData;
         }
         
@@ -159,11 +112,21 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
           throw new Error("Failed to extract data from JSON");
         }
 
-        // Transform data for visualization with full parameter paths
-        const transformedData = transformDataForVisualization(extractedData, parameters);
+        const normalizedParams = parameters.map(p => 
+          typeof p === 'string' ? p : p.parameter
+        );
+        setStringParams(normalizedParams);
+
+        const transformedData = transformDataForVisualization(extractedData, normalizedParams);
         
-        // Validate data for the specific graph type
-        const validationError = validateDataForVisualization(transformedData, graphType, parameters);
+        if (!transformedData || transformedData.length === 0) {
+          throw new Error("Failed to transform data for visualization");
+        }
+
+        console.log("Transformed data:", transformedData);
+        console.log("Using parameters:", normalizedParams);
+        
+        const validationError = validateDataForVisualization(transformedData, graphType, normalizedParams);
         if (validationError) {
           throw new Error(validationError);
         }
@@ -180,14 +143,12 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
 
     processApiData();
-  }, [apiData, queryString, rootKeys, parameters, graphType, extractDataByMultipleRootKeysPane]);
+  }, [apiData, queryString, rootKeys, parameters, graphType]);
 
   const handleFormSubmit = () => {
     setIsDialogOpen(false);
-    // Refresh data or update pane as needed
   };
 
-  // Handle delete button click
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -198,7 +159,6 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     console.log(`Attempting to delete pane with index: ${index}`);
 
     try {
-      // First try to delete from backend
       const response = await fetch(`http://localhost:8000/api/go/deleteAPI/${index}`, {
         method: 'DELETE',
       });
@@ -208,8 +168,6 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       }
       
       console.log(`Successfully deleted API ${index} from backend`);
-      
-      // If backend delete successful, update frontend
       onDelete(index);
     } catch (error) {
       console.error('Failed to delete API:', error);
@@ -219,16 +177,17 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     }
   };
 
-  // Get display name for a parameter, stripping any root key prefix
-  const getParameterName = (param: string | { parameter: string }) => {
+  const getParameterName = (param: string | { parameter: string }): string => {
     if (typeof param === 'string') return param;
     return param.parameter;
   };
 
-  // Generate title based on parameters and graph type
   const getVisTitle = () => {
     if (parameters && parameters.length >= 2) {
-      const displayParams = parameters.map(param => getParameterName(param).split('.').pop() || '');
+      const displayParams = parameters.map(param => {
+        const paramStr = getParameterName(param);
+        return paramStr.split('.').pop() || '';
+      });
       return `${displayParams[0]} vs ${displayParams[1]}`;
     }
     return apiName || 'Data Visualization';
@@ -239,7 +198,6 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       ref={containerRef}
       className="pane relative w-full h-full border border-gray-300 bg-white p-4 rounded-lg shadow overflow-hidden group transition-all hover:shadow-md"
     >
-      {/* Edit button */}
       <span className="absolute top-2 right-10 z-50 bg-blue-500 hover:bg-blue-700 text-white rounded-full p-1 transition-all opacity-0 group-hover:opacity-100">
         <button onClick={() => setIsDialogOpen(true)}>
           <MdModeEdit size={20} />
@@ -253,7 +211,6 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
         />
       )}
       
-      {/* Delete button */}
       {onDelete && (
         <button 
           className={`btn-delete absolute top-2 right-2 z-50 ${
@@ -267,7 +224,6 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
         </button>
       )}
       
-      {/* Main content */}
       <div className="w-full h-full flex flex-col">
         <div className="mb-3 text-lg font-bold text-gray-700"> 
           {apiName}
@@ -293,28 +249,28 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={parameters} 
               />
             ) : graphType === "line" ? (
               <LineGraph 
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={stringParams} 
               />
             ) : graphType === "scatter" ? (
               <ScatterPlot 
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={stringParams} 
               />
             ) : graphType === "bar" ? (
               <BarGraph 
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={stringParams} 
               />
             ) : (
               <div className="text-center text-gray-700">

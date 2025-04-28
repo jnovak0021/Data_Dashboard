@@ -36,7 +36,7 @@ type API struct {
 	PaneX      int         `json:"paneX"`
 	PaneY      int         `json:"paneY"`
 	Parameters []Parameter `json:"parameters"`
-	RootKeys   []RootKey   `json:"rootKeys"`
+	RootKeys   []string    `json:"rootKeys"`
 }
 
 type Parameter struct {
@@ -390,16 +390,14 @@ func createAPI(db *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		// Insert root keys
 		for _, rootKey := range input.RootKeys {
 			_, err := tx.Exec(
 				"INSERT INTO RootKeys (APIId, KeyPath) VALUES ($1, $2)",
-				apiId, rootKey.Path,
+				apiId, rootKey,
 			)
 			if err != nil {
-				log.Printf("Error inserting root key: %v", err)
-				http.Error(w, "Failed to create root keys", http.StatusInternalServerError)
-				return
+				log.Printf("Error with rootkeys in createAPI: %v", err)
+
 			}
 		}
 
@@ -488,7 +486,7 @@ func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
 				}
 				rootKeys = append(rootKeys, rootKey)
 			}
-			api.RootKeys = rootKeys
+			//api.RootKeys = rootKeys
 
 			apis = append(apis, api)
 		}
@@ -731,7 +729,7 @@ func getDashboardById(db *sql.DB) http.HandlerFunc {
 				return
 			}
 
-			var rootKeys []RootKey
+			//var rootKeys []RootKey
 			for rootKeyRows.Next() {
 				var rootKey RootKey
 				err := rootKeyRows.Scan(&rootKey.Path)
@@ -740,10 +738,11 @@ func getDashboardById(db *sql.DB) http.HandlerFunc {
 					http.Error(w, "Failed to fetch root keys", http.StatusInternalServerError)
 					return
 				}
-				rootKeys = append(rootKeys, rootKey)
+				//rootKeys = append(rootKeys, rootKey)
+				pane.RootKeys = append(pane.RootKeys, rootKey.Path)
 			}
 			rootKeyRows.Close()
-			pane.RootKeys = rootKeys
+			//pane.RootKeys = rootKeys
 
 			// --- Add pane to dashboard ---
 			panes = append(panes, pane)

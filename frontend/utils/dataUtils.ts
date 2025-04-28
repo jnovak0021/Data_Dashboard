@@ -1,61 +1,66 @@
-
 /**
  * Extract data from a JSON object using a specified root key and path
  */
-export function extractDataByRootKey(data: any, rootKeys: string[]): Record<string, any> {
-    if (!data || !rootKeys || rootKeys.length === 0) return {};
-    
-    const result: Record<string, any> = {};
-    for (const rootKey of rootKeys) {
-      result[rootKey] = data[rootKey]; // Use the string directly as a path
-    }
-    
-    return result;
-}
-/**
- * Extract data from a JSON object using multiple root keys
- */
-
-export function extractDataByMultipleRootKeys(data: any, rootKeys: string[]): Record<string, any>  {
-  if (!data || !rootKeys || rootKeys.length === 0) return {};
+export function extractDataByRootKey(data: any, rootKey: string): any {
+  if (!data) return null;
   
-  const result: Record<string, any> = {};
-  for (const rootKey of rootKeys) {
-    result[rootKey] = extractDataByMultipleRootKeys(data, rootKey); // Use the string directly as a path
+  if (rootKey === 'root' && Array.isArray(data)) {
+    return data;
+  }
+  
+  const pathParts = rootKey.split(/[\[\].]/).filter(Boolean);
+  let result = data;
+  
+  for (const part of pathParts) {
+    if (result === null || result === undefined) return null;
+    const index = parseInt(part);
+    if (!isNaN(index) && Array.isArray(result)) {
+      result = result[index];
+    } else {
+      result = result[part];
+    }
   }
   
   return result;
 }
+
+/**
+ * Extract data from a JSON object using multiple root keys
+ */
+export function extractDataByMultipleRootKeys(data: any, rootKeys: string[]): Record<string, any> {
+  if (!data || !rootKeys || rootKeys.length === 0) return {};
+  
+  const result: Record<string, any> = {};
+  for (const rootKey of rootKeys) {
+    result[rootKey] = extractDataByRootKey(data, rootKey);
+  }
+  
+  return result;
+}
+
 /**
  * Transform data for visualization
  */
-export function transformDataForVisualization(
-  extractedData: any, 
-  parameters: string[] = []
-): Record<string, any>[] {
+export function transformDataForVisualization(extractedData: any, parameters: string[] = []): Record<string, any>[] {
   if (!extractedData || parameters.length === 0) return [];
-  
+
+  // Handle case where extracted data is an object with multiple roots
   if (typeof extractedData === 'object' && !Array.isArray(extractedData)) {
     const paramsByRoot: Record<string, string[]> = {};
     
+    // Group parameters by their root keys
     parameters.forEach(param => {
-      if (typeof param !== 'string') {
-        console.warn('Invalid parameter type:', param);
-        return;
-      }
-
-      // Find which root this parameter belongs to
-      const rootPath = Object.keys(extractedData).find(root => 
-        param && root && param.indexOf(root + '.') === 0
+      const rootKey = Object.keys(extractedData).find(root => 
+        param.startsWith(root + '.')
       );
       
-      if (rootPath) {
-        // Get the relative path within that root
-        const relativePath = param.slice(rootPath.length + 1);
-        if (!paramsByRoot[rootPath]) {
-          paramsByRoot[rootPath] = [];
+      if (rootKey) {
+        if (!paramsByRoot[rootKey]) {
+          paramsByRoot[rootKey] = [];
         }
-        paramsByRoot[rootPath].push(relativePath);
+        // Remove root prefix from parameter
+        const relativePath = param.slice(rootKey.length + 1);
+        paramsByRoot[rootKey].push(relativePath);
       } else {
         if (!paramsByRoot['direct']) {
           paramsByRoot['direct'] = [];
@@ -63,81 +68,80 @@ export function transformDataForVisualization(
         paramsByRoot['direct'].push(param);
       }
     });
-    
-    let mergedResults: Record<string, any>[] = [];
-    
-    Object.entries(paramsByRoot).forEach(([rootPath, relativeParams]) => {
-      if (rootPath === 'direct') {
-        const result = processDirectParameters(extractedData, relativeParams);
-        mergedResults = mergeResults(mergedResults, result);
-      } else {
-        const rootData = extractedData[rootPath];
-        if (rootData) {
-          const result = processRootData(rootData, relativeParams, rootPath);
-          mergedResults = mergeResults(mergedResults, result);
-        }
-      }
-    });
-    
-    return mergedResults;
-  }
-  
-  return processRootData(extractedData, parameters);
-}
 
-/**
- * Process data from a specific root
- */
-function processRootData(
-  rootData: any, 
-  parameters: string[], 
-  rootPrefix: string = ''
-): Record<string, any>[] {
-  if (Array.isArray(rootData) && rootData.length > 0 && typeof rootData[0] === 'object') {
-    return rootData.map(item => {
-      const result: Record<string, any> = {};
-      parameters.forEach(param => {
-        const paramPath = param.split('.');
-        let value = item;
-        for (const part of paramPath) {
-          if (value === null || value === undefined) break;
-          value = value[part];
+    let results: Record<string, any>[] = [];
+    
+    // Process each root's data
+    Object.entries(paramsByRoot).forEach(([rootKey, rootParams]) => {
+      if (rootKey === 'direct') {
+        const directResults = processDirectParameters(extractedData, rootParams);
+        results = mergeResults(results, directResults);
+      } else {
+        const rootData = extractedData[rootKey];
+        if (Array.isArray(rootData)) {
+          // Handle array data
+          const rootResults = rootData.map(item => {
+            const record: Record<string, any> = {};
+            rootParams.forEach(param => {
+              const value = getNestedProperty(item, param);
+              record[`${rootKey}.${param}`] = value;
+            });
+            return record;
+          });
+          results = mergeResults(results, rootResults);
+        } else if (typeof rootData === 'object' && rootData !== null) {
+          // Handle object data with potential arrays
+          const arrayParams = rootParams.filter(param => 
+            Array.isArray(getNestedProperty(rootData, param))
+          );
+          
+          if (arrayParams.length > 0) {
+            // Find the longest array
+            const maxLength = Math.max(...arrayParams.map(param => 
+              (getNestedProperty(rootData, param) as any[]).length
+            ));
+            
+            // Create records for each array index
+            const rootResults = Array.from({ length: maxLength }, (_, i) => {
+              const record: Record<string, any> = {};
+              rootParams.forEach(param => {
+                const value = getNestedProperty(rootData, param);
+                record[`${rootKey}.${param}`] = Array.isArray(value) ? value[i] : value;
+              });
+              return record;
+            });
+            results = mergeResults(results, rootResults);
+          } else {
+            // Handle non-array object data
+            const record: Record<string, any> = {};
+            rootParams.forEach(param => {
+              const value = getNestedProperty(rootData, param);
+              record[`${rootKey}.${param}`] = value;
+            });
+            results = mergeResults(results, [record]);
+          }
         }
-        const paramKey = rootPrefix ? `${rootPrefix}.${param}` : param;
-        result[paramKey] = value;
+      }
+    });
+
+    return results;
+  }
+
+  // Handle single root or direct array data
+  if (Array.isArray(extractedData)) {
+    return extractedData.map(item => {
+      const record: Record<string, any> = {};
+      parameters.forEach(param => {
+        record[param] = getNestedProperty(item, param);
       });
-      return result;
+      return record;
     });
   }
-  
-  if (typeof rootData === 'object' && rootData !== null) {
-    const firstParam = parameters[0];
-    const firstParamData = getNestedProperty(rootData, firstParam);
-    
-    if (Array.isArray(firstParamData)) {
-      const result: Record<string, any>[] = [];
-      const arrayLength = firstParamData.length;
-      
-      for (let i = 0; i < arrayLength; i++) {
-        const record: Record<string, any> = {};
-        parameters.forEach(param => {
-          const paramData = getNestedProperty(rootData, param);
-          if (Array.isArray(paramData) && i < paramData.length) {
-            const paramKey = rootPrefix ? `${rootPrefix}.${param}` : param;
-            record[paramKey] = paramData[i];
-          }
-        });
-        result.push(record);
-      }
-      return result;
-    }
-  }
-  
+
+  // Handle single object
   const record: Record<string, any> = {};
   parameters.forEach(param => {
-    const value = getNestedProperty(rootData, param);
-    const paramKey = rootPrefix ? `${rootPrefix}.${param}` : param;
-    record[paramKey] = value;
+    record[param] = getNestedProperty(extractedData, param);
   });
   return [record];
 }
@@ -145,10 +149,7 @@ function processRootData(
 /**
  * Process direct parameters
  */
-function processDirectParameters(
-  data: any, 
-  parameters: string[]
-): Record<string, any>[] {
+function processDirectParameters(data: any, parameters: string[]): Record<string, any>[] {
   const record: Record<string, any> = {};
   parameters.forEach(param => {
     record[param] = getNestedProperty(data, param);
@@ -190,6 +191,7 @@ function mergeResults(
  */
 function getNestedProperty(obj: any, path: string): any {
   if (!obj || !path) return undefined;
+  
   const parts = path.split(/[\[\].]/).filter(Boolean);
   let result = obj;
   
@@ -217,7 +219,7 @@ export function validateDataForVisualization(
     return "No data available for visualization";
   }
   
-  if (parameters.length === 0) {
+  if (!parameters || parameters.length === 0) {
     return "No parameters selected for visualization";
   }
   
@@ -252,69 +254,25 @@ export function validateDataForVisualization(
 }
 
 /**
- * Get parameter display name
+ * Get parameter display name - i.e. gets the last value in the .notation string
  */
-export function getParameterDisplayName(fullPath: string, rootKeys: RootKeyData[] = []): string {
+export function getParameterDisplayName(fullPath: string, rootKeys: string[] = []): string {
+  if (!fullPath) return '';
+  
   for (const rootKey of rootKeys) {
-    if (fullPath.startsWith(rootKey.path + '.')) {
-      const relativePath = fullPath.substring(rootKey.path.length + 1);
+    if (fullPath.startsWith(rootKey + '.')) {
+      const relativePath = fullPath.substring(rootKey.length + 1);
       const parts = relativePath.split('.');
       return parts[parts.length - 1];
     }
   }
+  
   const parts = fullPath.split('.');
   return parts[parts.length - 1];
 }
-/**
- * Root key data interface
- */
-export interface RootKeyData {
-  key: string;   // Display name of the key
-  path: string;  // Full path to the key
+
+//checks for falsy data types or if the array is empty and returns valid empty array
+export function normalizeRootKeys(rootKeys: string[]): string[] {
+  if (!rootKeys || rootKeys.length === 0) return ["EMPTY"];
+  return rootKeys;
 }
-
-/**
- * Selected node in the API data structure
- */
-export interface SelectedNode {
-  root: string;      // Root node this selection belongs to
-  path: string[];    // Path to the node as array of keys
-  fullPath: string;  // Full path as string for display/lookups
-}
-
-/**
- * API data structure
- */
-export interface ApiDataStructure {
-  apiId: number;
-  userId: number;
-  apiName: string;
-  apiString: string;
-  apiKey?: string;
-  graphType: string;
-  paneX: number;
-  paneY: number;
-  parameters: string[];
-  rootKeys: RootKeyData[];
-}
-
-/**
- * API visualization configuration
- */
-export interface ApiVisualizationConfig {
-  graphType: string;
-  parameters: string[];
-  rootKeys: RootKeyData[];
-  dimensions: {
-    width: number;
-    height: number;
-  };
-}
-
-
-
-
-
-
-
-
