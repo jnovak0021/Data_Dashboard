@@ -16,7 +16,7 @@ import {
   FaTrash,
   FaShoppingCart
 } from 'react-icons/fa';
-import { DashboardType } from '../../utils/types';
+import { DashboardType } from '@/../utils/types';
 import DashboardShop from './DashboardShop';
 
 interface DeleteConfirmationProps {
@@ -334,8 +334,6 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
                   <button
                   className="flex items-center w-full p-2 rounded-lg hover:bg-pink-700 cursor-pointer text-pink-200 hover:text-white transition-colors focus:outline-none focus:ring-1 focus:ring-pink-400"
                   >
-                    <FaShoppingCart className="text-sm mr-2 flex-shrink-0" />
-                    <span className="text-sm whitespace-nowrap">Dashboard Shop</span>
 
                   </button>
                 </li>

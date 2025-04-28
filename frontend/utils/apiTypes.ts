@@ -1,10 +1,10 @@
 /**
  * Root key data interface
- */
-export interface RootKeyData {
-    key: string;   // Display name of the key
-    path: string;  // Full path to the key
-  }
+//  */
+// export interface RootKeyData {
+//     key: string;   // Display name of the key
+//     path: string;  // Full path to the key
+//   }
   
   /**
    * Selected node in the API data structure
@@ -28,7 +28,7 @@ export interface RootKeyData {
     paneX: number;
     paneY: number;
     parameters: string[];
-    rootKeys: RootKeyData[];
+    rootKeys: string[];
   }
   
   /**
@@ -37,7 +37,7 @@ export interface RootKeyData {
   export interface ApiVisualizationConfig {
     graphType: string;
     parameters: string[];
-    rootKeys: RootKeyData[];
+    rootKeys: string[];
     dimensions: {
       width: number;
       height: number;

@@ -9,8 +9,7 @@ import {
   extractDataByRootKey, 
   extractDataByMultipleRootKeys, 
   transformDataForVisualization, 
-  validateDataForVisualization,
-  RootKeyData 
+  validateDataForVisualization 
 } from '@/../utils/dataUtils';
 import APIFormDialog from './APIFormDialog';
 
@@ -22,7 +21,7 @@ interface DashboardPaneProps {
   graphType: string;
   parameters: string[];
   apiData: any;
-  rootKeys: RootKeyData[] | string[]; // Support both new and old format
+  rootKeys: string[]; // Converted to plain string array (path values only)
   apiName?: string;
   onDelete?: (id: number) => void;
 }
@@ -74,41 +73,49 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
   }, []);
 
-//   useEffect(() => {
-//   console.log("===== Printing rootKeys =====");
+  // Debug: Log root keys and parameters
+  useEffect(() => {
+    console.debug("Debug - Printing RootKeys (path values only):", rootKeys);
+    console.debug("Debug - Printing Parameters:", parameters);
+  }, [rootKeys, parameters]);
 
-//   if (Array.isArray(rootKeys)) {
-//     rootKeys.forEach((rk, idx) => {
-//       if (typeof rk === 'string') {
-//         console.log(`RootKey ${idx}: key = ${rk}, path = ${rk}`);
-//       } else if (typeof rk === 'object' && 'key' in rk && 'path' in rk) {
-//         console.log(`RootKey ${idx}: key = ${rk.key}, path = ${rk.path}`);
-//       } else {
-//         console.log(`RootKey ${idx}: Unexpected format`, rk);
-//       }
-//     });
-//   } else {
-//     console.log('rootKeys is not an array:', rootKeys);
-//   }
-
-//   console.log("===== Printing parameters =====");
-
-//   if (Array.isArray(parameters)) {
-//     parameters.forEach((param, idx) => {
-//       if (typeof param === 'string') {
-//         console.log(`Parameter ${idx}: ${param}`);
-//       } else if (typeof param === 'object' && 'parameter' in param) {
-//         console.log(`Parameter ${idx}: ${param.parameter}`);
-//       } else {
-//         console.log(`Parameter ${idx}: Unexpected format`, param);
-//       }
-//     });
-//   } else {
-//     console.log('parameters is not an array:', parameters);
-//   }
-// }, [rootKeys, parameters]);
-
-
+  const extractDataByMultipleRootKeysPane = React.useCallback((data: any, rootKeys: string[]): Record<string, any> => {
+    if (!data || !rootKeys || rootKeys.length === 0) return {};
+    
+    const result: Record<string, any> = {};
+    for (const rootKey of rootKeys) {
+      result[rootKey] = extractDataByRootKeyPane(data, rootKey); // Use the string directly as a path
+    }
+    
+    return result;
+  }, []);
+  function extractDataByRootKeyPane(data: any, rootKey: string): any {
+    if (!data) return null;
+  
+    // If the rootKey is 'root' and the data is an array, return the data as is
+    if (rootKey === 'root' && Array.isArray(data)) {
+      return data;
+    }
+  
+    // Split the rootKey path into parts (handles dot notation and array indices)
+    const pathParts = rootKey.split(/[\[\].]/).filter(Boolean);
+    let result = data;
+  
+    for (const part of pathParts) {
+      if (result === null || result === undefined) return null;
+      const index = parseInt(part);
+  
+      // If the part is a numeric index and the result is an array, access the index
+      if (!isNaN(index) && Array.isArray(result)) {
+        result = result[index];
+      } else {
+        // Otherwise, access the property by key
+        result = result[part];
+      }
+    }
+  
+    return result;
+  }
   // Process the API data or fetch from queryString
   useEffect(() => {
     const processApiData = async () => {
@@ -134,30 +141,15 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
           throw new Error("No data source provided");
         }
 
-        // Convert old string rootKeys format to new RootKeyData format if needed
-        let formattedRootKeys: RootKeyData[] = [];
-        if (rootKeys.length > 0) {
-          if (typeof rootKeys[0] === 'string') {
-            // Old format - convert to new format
-            formattedRootKeys = (rootKeys as string[]).map(key => ({ key, path: key }));
-          } else {
-            // Already in new format
-            formattedRootKeys = rootKeys as RootKeyData[];
-          }
-        }
-
         let extractedData;
-        
+
         // Handle multiple root keys if available
-        if (formattedRootKeys.length > 1) {
+        if (rootKeys.length > 1) {
           // Extract data using multiple root keys
-          extractedData = extractDataByMultipleRootKeys(jsonData, formattedRootKeys);
-          
-          // Merge root data as needed for visualization
-          // The transformDataForVisualization function will handle combining data from multiple roots
-        } else if (formattedRootKeys.length === 1) {
+          extractedData = extractDataByMultipleRootKeysPane(jsonData, rootKeys);
+        } else if (rootKeys.length === 1) {
           // Single root key
-          extractedData = extractDataByRootKey(jsonData, formattedRootKeys[0]);
+          extractedData = extractDataByRootKeyPane(jsonData, rootKeys[0]);
         } else {
           // No root keys, use entire JSON
           extractedData = jsonData;
@@ -188,7 +180,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
 
     processApiData();
-  }, [apiData, queryString, rootKeys, parameters, graphType]);
+  }, [apiData, queryString, rootKeys, parameters, graphType, extractDataByMultipleRootKeysPane]);
 
   const handleFormSubmit = () => {
     setIsDialogOpen(false);
@@ -227,15 +219,12 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     }
   };
 
-  // // Get display name for a parameter, stripping any root key prefix
-  // const getParameterDisplayName = (param: string): string => {
-  //   const parts = param.split('.');
-  //   return parts[parts.length - 1];
-  // };
+  // Get display name for a parameter, stripping any root key prefix
   const getParameterName = (param: string | { parameter: string }) => {
     if (typeof param === 'string') return param;
     return param.parameter;
   };
+
   // Generate title based on parameters and graph type
   const getVisTitle = () => {
     if (parameters && parameters.length >= 2) {
@@ -250,7 +239,6 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       ref={containerRef}
       className="pane relative w-full h-full border border-gray-300 bg-white p-4 rounded-lg shadow overflow-hidden group transition-all hover:shadow-md"
     >
-      
       {/* Edit button */}
       <span className="absolute top-2 right-10 z-50 bg-blue-500 hover:bg-blue-700 text-white rounded-full p-1 transition-all opacity-0 group-hover:opacity-100">
         <button onClick={() => setIsDialogOpen(true)}>
@@ -286,14 +274,10 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
         </div>
         
         <div className="mb-3 text-md font-semibold text-gray-700">
-          {/* {getVisTitle()} */}
+          {getVisTitle()}
         </div>
       
         <div className="flex-1 flex items-center justify-center">
-          ROOTS:
-          
-          JSON:
-          {JSON.stringify(data)}
           {loading ? (
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>

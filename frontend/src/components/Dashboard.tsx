@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import DashboardPane from './DashboardPane';
 import { fetchUserId } from "@/../utils/auth";
-import { RootKeyData } from '@/../utils/dataUtils';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -19,7 +18,7 @@ interface APIData {
   paneX: number;
   paneY: number;
   parameters: string[] | null;
-  rootKeys: RootKeyData[]; // Updated to use RootKeyData
+  rootKeys: string[]; // Use string[] for rootKeys
 }
 
 interface Layout {
@@ -45,25 +44,15 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState(0);
-  const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>(() => {
-    // Try to load saved layouts from localStorage
-    if (typeof window !== 'undefined' && dashboardId) {
-      const layoutKey = `dashboardLayout_${dashboardId}`;
-      const savedLayouts = localStorage.getItem(layoutKey);
-      return savedLayouts ? JSON.parse(savedLayouts) : { lg: [], md: [], sm: [], xs: [] };
-    }
-    return { lg: [], md: [], sm: [], xs: [] };
-  });
+  const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>({ lg: [], md: [], sm: [], xs: [] });
 
-  // Fetch the list of APIs based on dashboard ID
   useEffect(() => {
     const fetchAPIs = async () => {
-      // Only proceed if we have a dashboard ID
       if (!dashboardId) {
         setLoading(false);
         return;
       }
-      
+
       try {
         setLoading(true);
         const fetchedUserId = await fetchUserId();
@@ -72,85 +61,73 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         }
         setUserId(fetchedUserId);
 
-        // Fetch dashboard details to get its panes
         const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
         if (!response.ok) {
           throw new Error(`Error fetching dashboard: ${response.statusText}`);
         }
-        
+
         const dashboardData = await response.json();
         const apiList = dashboardData.panes || [];
-        
+
         console.log('Fetched APIs for dashboard:', apiList);
-        
-        // Process the API list to ensure RootKeyData format
+
+        if (!apiList || apiList.length === 0) {
+          console.warn('No panes found in dashboard data.');
+        }
+
         const processedApis = apiList.map((api: any) => {
-          // Convert old string rootKey format to new RootKeyData format if needed
-          let formattedRootKeys: RootKeyData[] = [];
-          
-          if (api.rootKey) {
-            if (Array.isArray(api.rootKey)) {
-              if (api.rootKey.length > 0) {
-                // Check if it's already in the new format or needs conversion
-                if (typeof api.rootKey[0] === 'string') {
-                  // Old format - convert to new format
-                  formattedRootKeys = api.rootKey.map((key: string) => ({ key, path: key }));
-                } else if (typeof api.rootKey[0] === 'object' && 'key' in api.rootKey[0]) {
-                  // Already in new format
-                  formattedRootKeys = api.rootKey;
-                }
-              }
-            } else if (typeof api.rootKey === 'string') {
-              // Single string rootKey - convert to array of RootKeyData
-              formattedRootKeys = [{ key: api.rootKey, path: api.rootKey }];
-            }
-          }
-          
+          console.log('Received rootKeys:', api.rootKeys);
+
+          // Extract the `path` field from each root key
+          const formattedRootKeys: string[] = Array.isArray(api.rootKeys)
+            ? api.rootKeys.map((keyObj: { path: string }) => keyObj.path)
+            : [];
+
+          console.log(`Processed rootKeys for API ${api.apiName} (${api.apiId}):`, formattedRootKeys);
+
           return {
             ...api,
-            rootKeys: formattedRootKeys
+            rootKeys: formattedRootKeys,
           };
         });
-        
+
         setApis(processedApis);
-        
-        // Generate layout if no saved layout exists or if APIs have changed
+
         if (!layouts.lg.length || layouts.lg.length !== apiList.length) {
           generateInitialLayout(apiList);
         }
       } catch (err: any) {
+        console.error('Error fetching APIs:', err.message);
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchAPIs();
   }, [refresh, dashboardId]);
 
-  // Fetch data for each API
   useEffect(() => {
-    const getApiData = async (api: APIData) => {
-      try {
-        const response = await fetch(api.apiString);
-        if (!response.ok) {
-          throw new Error(`Error fetching data for API ${api.apiId}: ${response.statusText}`);
-
-        }
-        const data = await response.json();
-        return ({ apiId: api.apiId, data });
-      } catch (err: any) {
-        console.error(`Error fetching data for API ${api.apiId}:`, err.message);
-        return { apiId: api.apiId, data: null };
-      }
-
-    };
-
     const fetchAllApiData = async () => {
       if (apis.length > 0) {
         try {
-          const results = await Promise.all(apis.map((api) => getApiData(api)));
-          console.log('Fetched API Data:', results);
+          const results = await Promise.all(apis.map(async (api) => {
+            console.log(`Fetching data for API ${api.apiName} (${api.apiId}) from ${api.apiString}`);
+            
+            try {
+              const response = await fetch(api.apiString);
+              if (!response.ok) {
+                throw new Error(`Error fetching data for API ${api.apiId}: ${response.statusText}`);
+              }
+              const data = await response.json();
+              return { apiId: api.apiId, data };
+            } catch (err: any) {
+              console.error(`Error fetching data for API ${api.apiId}:`, err.message);
+              return { apiId: api.apiId, data: null };
+            }
+          }));
+
+          console.log('Fetched API data:', results);
           setApiData(results);
         } catch (err) {
           console.error('Error fetching API data:', err);
@@ -161,91 +138,42 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
     fetchAllApiData();
   }, [apis]);
 
-  // Save layouts to localStorage whenever they change
-  useEffect(() => {
-    if (typeof window !== 'undefined' && layouts.lg.length > 0 && dashboardId) {
-      const layoutKey = `dashboardLayout_${dashboardId}`;
-      localStorage.setItem(layoutKey, JSON.stringify(layouts));
-    }
-  }, [layouts, dashboardId]);
-
-  // Generate initial layout based on APIs
   const generateInitialLayout = (apiList: APIData[]) => {
     const lgLayout: Layout[] = [];
     const mdLayout: Layout[] = [];
     const smLayout: Layout[] = [];
     const xsLayout: Layout[] = [];
-    
+
     apiList.forEach((api, index) => {
-      // Calculate size in grid units (1 grid unit = 50px by default)
-      const w = Math.max(Math.ceil(api.paneX / 100), 3); // Min width of 3
-      const h = Math.max(Math.ceil(api.paneY / 100), 3); // Min height of 3
-      
-      // Add to layouts for different breakpoints
-      lgLayout.push({
-        i: `${api.apiId}`,
-        x: (index % 3) * 3,
-        y: Math.floor(index / 3) * 3,
-        w,
-        h,
-        minW: 2,
-        minH: 2
-      });
-      
-      mdLayout.push({
-        i: `${api.apiId}`,
-        x: (index % 2) * 3,
-        y: Math.floor(index / 2) * 3,
-        w,
-        h,
-        minW: 2,
-        minH: 2
-      });
-      
-      smLayout.push({
-        i: `${api.apiId}`,
-        x: 0,
-        y: index * 3,
-        w: 6,
-        h,
-        minW: 2,
-        minH: 2
-      });
-      
-      xsLayout.push({
-        i: `${api.apiId}`,
-        x: 0,
-        y: index * 3,
-        w: 4,
-        h,
-        minW: 2,
-        minH: 2
-      });
+      const w = Math.max(Math.ceil(api.paneX / 100), 3);
+      const h = Math.max(Math.ceil(api.paneY / 100), 3);
+
+      lgLayout.push({ i: `${api.apiId}`, x: (index % 3) * 3, y: Math.floor(index / 3) * 3, w, h, minW: 2, minH: 2 });
+      mdLayout.push({ i: `${api.apiId}`, x: (index % 2) * 3, y: Math.floor(index / 2) * 3, w, h, minW: 2, minH: 2 });
+      smLayout.push({ i: `${api.apiId}`, x: 0, y: index * 3, w: 6, h, minW: 2, minH: 2 });
+      xsLayout.push({ i: `${api.apiId}`, x: 0, y: index * 3, w: 4, h, minW: 2, minH: 2 });
     });
-    
+
     setLayouts({ lg: lgLayout, md: mdLayout, sm: smLayout, xs: xsLayout });
   };
 
-  // Handle layout changes
   const onLayoutChange = (currentLayout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
     setLayouts(allLayouts);
   };
 
-  // Handle pane deletion
   const handleDeletePane = async (apiId: number) => {
     if (!confirm(`Are you sure you want to delete this pane?`)) {
       return;
     }
-    
+
     console.log(`Deleting pane with ID: ${apiId}`);
-    
-    // Remove the association between dashboard and API if we have a dashboard ID
+
     if (dashboardId) {
       try {
         const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes/${apiId}`, {
           method: 'DELETE',
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to remove pane from dashboard: ${response.statusText}`);
         }
@@ -253,111 +181,58 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         console.error('Error removing pane from dashboard:', error);
       }
     }
-    
-    // Update APIs state - remove the deleted API
-    setApis(prevApis => prevApis.filter(api => api.apiId !== apiId));
-    
-    // Update apiData state - remove the deleted API data
-    setApiData(prevData => prevData.filter(data => data.apiId !== apiId));
-    
-    // Update layouts state - remove the layout item with matching ID
-    setLayouts(prevLayouts => {
+
+    setApis((prevApis) => prevApis.filter((api) => api.apiId !== apiId));
+    setApiData((prevData) => prevData.filter((data) => data.apiId !== apiId));
+    setLayouts((prevLayouts) => {
       const newLayouts = { ...prevLayouts };
-      
-      // For each breakpoint (lg, md, sm, xs), filter out the layout item
       for (const breakpoint in newLayouts) {
         if (Object.prototype.hasOwnProperty.call(newLayouts, breakpoint)) {
-          newLayouts[breakpoint] = newLayouts[breakpoint].filter(
-            item => item.i !== `${apiId}`
-          );
+          newLayouts[breakpoint] = newLayouts[breakpoint].filter((item) => item.i !== `${apiId}`);
         }
       }
-      
       return newLayouts;
     });
   };
-  
+
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Loading...</div>;
+    return <div>Loading...</div>;
   }
 
   if (error) {
-    return <div className="text-red-500 p-4">Error: {error}</div>;
-  }
-  
-  if (!dashboardId) {
-    return <div className="text-center p-4">No dashboard selected</div>;
+    return <div>Error: {error}</div>;
   }
 
   return (
     <div className="dashboard-container">
       <ResponsiveGridLayout
-        className="layout"
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
         cols={{ lg: 12, md: 9, sm: 6, xs: 4 }}
         rowHeight={50}
         onLayoutChange={onLayoutChange}
-        isDraggable={true}
-        isResizable={true}
+        isResizable
         compactType="vertical"
-        margin={[20, 20]}
-        containerPadding={[20, 20]}
-        draggableCancel=".btn-delete"
       >
-{apis.map((api) => {
-  const apiSpecificData = apiData.find((data) => data.apiId === api.apiId)?.data;
-
-  // 🔵 Print rootKeys
-  console.log(`RootKeys for API ${api.apiName} (${api.apiId}):`);
-  if (Array.isArray(api.rootKeys)) {
-    api.rootKeys.forEach((rk, idx) => {
-      if (typeof rk === 'string') {
-        console.log(`  RootKey ${idx}: key = ${rk}, path = ${rk}`);
-      } else if (typeof rk === 'object' && 'key' in rk && 'path' in rk) {
-        console.log(`  RootKey ${idx}: key = ${rk.key}, path = ${rk.path}`);
-      } else {
-        console.log(`  RootKey ${idx}: Unexpected format`, rk);
-      }
-    });
-  } else {
-    console.log('  rootKeys is not an array:', api.rootKeys);
-  }
-
-  // 🟢 Print parameters
-  console.log(`Parameters for API ${api.apiName} (${api.apiId}):`);
-  if (Array.isArray(api.parameters)) {
-    api.parameters.forEach((param, idx) => {
-      if (typeof param === 'string') {
-        console.log(`  Parameter ${idx}: ${param}`);
-      } else if (typeof param === 'object' && 'parameter' in param) {
-        console.log(`  Parameter ${idx}: ${param.parameter}`);
-      } else {
-        console.log(`  Parameter ${idx}: Unexpected format`, param);
-      }
-    });
-  } else {
-    console.log('  parameters is not an array:', api.parameters);
-  }
-
-  return (
-    <div key={`${api.apiId}`} className="dashboard-pane-container">
-      <DashboardPane
-        index={api.apiId}
-        apiName={api.apiName}
-        sizeX={api.paneX}
-        sizeY={api.paneY}
-        queryString={api.apiString}
-        graphType={api.graphType || 'pie'}
-        parameters={api.parameters || []}
-        apiData={apiSpecificData}
-        onDelete={handleDeletePane}
-        rootKeys={api.rootKeys || []}
-      />
-    </div>
-  );
-})}
-
+        {apis.map((api) => {
+          console.log(`Rendering pane for API ${api.apiName} (${api.apiId}): rootKeys =`, api.rootKeys);
+          return (
+            <div key={api.apiId}>
+              <DashboardPane
+                index={api.apiId}
+                apiName={api.apiName}
+                sizeX={api.paneX}
+                sizeY={api.paneY}
+                queryString={api.apiString}
+                graphType={api.graphType || 'bar'}
+                parameters={api.parameters || []}
+                rootKeys={api.rootKeys || []}
+                apiData={apiData.find((data) => data.apiId === api.apiId)?.data}
+                onDelete={handleDeletePane}
+              />
+            </div>
+          );
+        })}
       </ResponsiveGridLayout>
     </div>
   );

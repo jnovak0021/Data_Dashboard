@@ -23,7 +23,6 @@ type User struct {
 }
 
 type RootKey struct {
-	Key  string `json:"key"`
 	Path string `json:"path"`
 }
 
@@ -394,8 +393,8 @@ func createAPI(db *sql.DB) http.HandlerFunc {
 		// Insert root keys
 		for _, rootKey := range input.RootKeys {
 			_, err := tx.Exec(
-				"INSERT INTO RootKeys (APIId, KeyName, KeyPath) VALUES ($1, $2, $3)",
-				apiId, rootKey.Key, rootKey.Path,
+				"INSERT INTO RootKeys (APIId, KeyPath) VALUES ($1, $2)",
+				apiId, rootKey.Path,
 			)
 			if err != nil {
 				log.Printf("Error inserting root key: %v", err)
@@ -470,7 +469,7 @@ func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
 			api.Parameters = parameters
 
 			// Get root keys
-			rootKeyRows, err := db.Query("SELECT KeyName, KeyPath FROM RootKeys WHERE APIId = $1", api.APIId)
+			rootKeyRows, err := db.Query("SELECT KeyPath FROM RootKeys WHERE APIId = $1", api.APIId)
 			if err != nil {
 				log.Printf("Error querying root keys: %v", err)
 				http.Error(w, "Failed to fetch root keys", http.StatusInternalServerError)
@@ -481,7 +480,7 @@ func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
 			var rootKeys []RootKey
 			for rootKeyRows.Next() {
 				var rootKey RootKey
-				err := rootKeyRows.Scan(&rootKey.Key, &rootKey.Path)
+				err := rootKeyRows.Scan(&rootKey.Path)
 				if err != nil {
 					log.Printf("Error scanning root key: %v", err)
 					http.Error(w, "Failed to fetch root keys", http.StatusInternalServerError)
@@ -725,7 +724,7 @@ func getDashboardById(db *sql.DB) http.HandlerFunc {
 			pane.Parameters = parameters
 
 			// --- Fetch RootKeys for this API ---
-			rootKeyRows, err := db.Query("SELECT KeyName, KeyPath FROM RootKeys WHERE APIId = $1", pane.APIId)
+			rootKeyRows, err := db.Query("SELECT KeyPath FROM RootKeys WHERE APIId = $1", pane.APIId)
 			if err != nil {
 				log.Printf("Error querying root keys for APIId %d: %v", pane.APIId, err)
 				http.Error(w, "Failed to fetch root keys", http.StatusInternalServerError)
@@ -735,7 +734,7 @@ func getDashboardById(db *sql.DB) http.HandlerFunc {
 			var rootKeys []RootKey
 			for rootKeyRows.Next() {
 				var rootKey RootKey
-				err := rootKeyRows.Scan(&rootKey.Key, &rootKey.Path)
+				err := rootKeyRows.Scan(&rootKey.Path)
 				if err != nil {
 					log.Printf("Error scanning root key row: %v", err)
 					http.Error(w, "Failed to fetch root keys", http.StatusInternalServerError)
@@ -870,3 +869,278 @@ func removePaneFromDashboard(db *sql.DB) http.HandlerFunc {
 		json.NewEncoder(w).Encode(map[string]string{"message": "Pane removed from dashboard successfully"})
 	}
 }
+
+/*
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+
+	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+)
+
+type User struct {
+	Id         int         `json:"id"`
+	Name       string      `json:"name"`
+	Email      string      `json:"email"`
+	Password   string      `json:"password,omitempty"`
+	Dashboards []Dashboard `json:"dashboards"`
+}
+
+type RootKey struct {
+	Path string `json:"path"` // Updated: Only store the path
+}
+
+type API struct {
+	APIId      int         `json:"apiId"`
+	UserId     int         `json:"userId"`
+	APIName    string      `json:"apiName"`
+	APIString  string      `json:"apiString"`
+	APIKey     string      `json:"apiKey"`
+	GraphType  string      `json:"graphType"`
+	PaneX      int         `json:"paneX"`
+	PaneY      int         `json:"paneY"`
+	Parameters []Parameter `json:"parameters"`
+	RootKeys   []RootKey   `json:"rootKeys"`
+}
+
+type Parameter struct {
+	Parameter string `json:"parameter"` // Corresponds to Parameter TEXT
+}
+
+type Dashboard struct {
+	Id     int    `json:"id"`
+	UserId int    `json:"userId"`
+	Name   string `json:"name"`
+	Panes  []API  `json:"panes"`
+}
+
+func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbURL := os.Getenv("DATABASE_URL")
+	fmt.Println("Trying to connect to:", dbURL)
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Connection error:", err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatal("Ping error:", err)
+	} else {
+		fmt.Println("Successfully connected to the database")
+	}
+	defer db.Close()
+	log.Println("Connected")
+
+	// Update the RootKeys table to only hold KeyPath
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS RootKeys (
+			RootKeyId SERIAL PRIMARY KEY,
+			APIId INT NOT NULL,
+			KeyPath TEXT NOT NULL,
+			CONSTRAINT fk_api FOREIGN KEY (APIId) REFERENCES APIs(APIId) ON DELETE CASCADE
+		)
+	`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Created/Updated RootKeys table")
+
+	// Other table creation and setup omitted for brevity...
+
+	router := mux.NewRouter()
+
+	// API routes
+	router.HandleFunc("/api/go/createAPI", createAPI(db)).Methods("POST")
+	router.HandleFunc("/api/go/deleteAPI/{index}", deleteAPI(db)).Methods("DELETE")
+	router.HandleFunc("/api/go/apis/{userId}", getAPIsByUserId(db)).Methods("GET")
+
+	// Start server
+	enhancedRouter := enableCORS(jsonContentTypeMiddleware(router))
+	log.Fatal(http.ListenAndServe(":8000", enhancedRouter))
+}
+
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func jsonContentTypeMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Create API
+func createAPI(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input API
+		err := json.NewDecoder(r.Body).Decode(&input)
+		if err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+		// Start a transaction
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("Error starting transaction: %v", err)
+			http.Error(w, "Failed to create API", http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		var apiId int
+		err = tx.QueryRow(
+			"INSERT INTO APIs (UserId, APIString, APIName, APIKey, GraphType, PaneX, PaneY) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING APIId",
+			input.UserId, input.APIString, input.APIName, input.APIKey, input.GraphType, input.PaneX, input.PaneY,
+		).Scan(&apiId)
+
+		if err != nil {
+			log.Printf("Error inserting API: %v", err)
+			http.Error(w, "Failed to create API", http.StatusInternalServerError)
+			return
+		}
+
+		// Insert parameters
+		for _, param := range input.Parameters {
+			_, err := tx.Exec(
+				"INSERT INTO Parameters (APIId, Parameter) VALUES ($1, $2)",
+				apiId, param.Parameter,
+			)
+			if err != nil {
+				log.Printf("Error inserting parameter: %v", err)
+				http.Error(w, "Failed to create parameters", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// Insert root keys
+		for _, rootKey := range input.RootKeys {
+			_, err := tx.Exec(
+				"INSERT INTO RootKeys (APIId, KeyPath) VALUES ($1, $2)", // Updated to only use KeyPath
+				apiId, rootKey.Path,
+			)
+			if err != nil {
+				log.Printf("Error inserting root key: %v", err)
+				http.Error(w, "Failed to create root keys", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		// Commit the transaction
+		err = tx.Commit()
+		if err != nil {
+			log.Printf("Error committing transaction: %v", err)
+			http.Error(w, "Failed to create API", http.StatusInternalServerError)
+			return
+		}
+
+		input.APIId = apiId
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(input)
+	}
+}
+
+// Get APIs by User ID
+func getAPIsByUserId(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		userId := vars["userId"]
+
+		rows, err := db.Query(`
+            SELECT APIId, UserId, APIName, APIString, APIKey, GraphType, PaneX, PaneY
+            FROM APIs WHERE UserId = $1
+        `, userId)
+		if err != nil {
+			log.Printf("Error querying APIs: %v", err)
+			http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var apis []API
+		for rows.Next() {
+			var api API
+			err := rows.Scan(&api.APIId, &api.UserId, &api.APIName, &api.APIString,
+				&api.APIKey, &api.GraphType, &api.PaneX, &api.PaneY)
+			if err != nil {
+				log.Printf("Error scanning API row: %v", err)
+				http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
+				return
+			}
+
+			// Get parameters
+			paramRows, err := db.Query("SELECT Parameter FROM Parameters WHERE APIId = $1", api.APIId)
+			if err != nil {
+				log.Printf("Error querying parameters: %v", err)
+				http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+				return
+			}
+			defer paramRows.Close()
+
+			var parameters []Parameter
+			for paramRows.Next() {
+				var param Parameter
+				err := paramRows.Scan(&param.Parameter)
+				if err != nil {
+					log.Printf("Error scanning parameter: %v", err)
+					http.Error(w, "Failed to fetch parameters", http.StatusInternalServerError)
+					return
+				}
+				parameters = append(parameters, param)
+			}
+			api.Parameters = parameters
+
+			// Get root keys
+			rootKeyRows, err := db.Query("SELECT KeyPath FROM RootKeys WHERE APIId = $1", api.APIId) // Updated to only fetch KeyPath
+			if err != nil {
+				log.Printf("Error querying root keys: %v", err)
+				http.Error(w, "Failed to fetch root keys", http.StatusInternalServerError)
+				return
+			}
+			defer rootKeyRows.Close()
+
+			var rootKeys []RootKey
+			for rootKeyRows.Next() {
+				var rootKey RootKey
+				err := rootKeyRows.Scan(&rootKey.Path) // Updated to only scan KeyPath
+				if err != nil {
+					log.Printf("Error scanning root key: %v", err)
+					http.Error(w, "Failed to fetch root keys", http.StatusInternalServerError)
+					return
+				}
+				rootKeys = append(rootKeys, rootKey)
+			}
+			api.RootKeys = rootKeys
+
+			apis = append(apis, api)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(apis)
+	}
+}*/

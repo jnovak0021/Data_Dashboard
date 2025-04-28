@@ -2,43 +2,30 @@
 /**
  * Extract data from a JSON object using a specified root key and path
  */
-export function extractDataByRootKey(data: any, rootKeyData: RootKeyData): any {
-  if (!data) return null;
-  
-  if (rootKeyData.key === 'root' && Array.isArray(data)) {
-    return data;
-  }
-  
-  const pathParts = rootKeyData.path.split(/[\[\].]/).filter(Boolean);
-  let result = data;
-  
-  for (const part of pathParts) {
-    if (result === null || result === undefined) return null;
-    const index = parseInt(part);
-    if (!isNaN(index) && Array.isArray(result)) {
-      result = result[index];
-    } else {
-      result = result[part];
+export function extractDataByRootKey(data: any, rootKeys: string[]): Record<string, any> {
+    if (!data || !rootKeys || rootKeys.length === 0) return {};
+    
+    const result: Record<string, any> = {};
+    for (const rootKey of rootKeys) {
+      result[rootKey] = data[rootKey]; // Use the string directly as a path
     }
-  }
-  
-  return result;
+    
+    return result;
 }
-
 /**
  * Extract data from a JSON object using multiple root keys
  */
-export function extractDataByMultipleRootKeys(data: any, rootKeys: RootKeyData[]): Record<string, any> {
+
+export function extractDataByMultipleRootKeys(data: any, rootKeys: string[]): Record<string, any>  {
   if (!data || !rootKeys || rootKeys.length === 0) return {};
   
   const result: Record<string, any> = {};
   for (const rootKey of rootKeys) {
-    result[rootKey.path] = extractDataByRootKey(data, rootKey);
+    result[rootKey] = extractDataByMultipleRootKeys(data, rootKey); // Use the string directly as a path
   }
   
   return result;
 }
-
 /**
  * Transform data for visualization
  */
