@@ -64,7 +64,7 @@ const DashboardPage = () => {
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">{dashboardTitle}</h1>
-            <APIFormDialog onFormSubmit={handleFormSubmit} />
+            <APIFormDialog onFormSubmit={handleFormSubmit} editMode = {false}/>
           </div>
           
           <div className="bg-white shadow-lg rounded-lg p-0">

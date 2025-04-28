@@ -1,208 +1,333 @@
-/**
- * Utility functions for handling JSON data in visualizations
- */
 
 /**
- * Gets a nested value from an object using a path string
- * @param obj - The object to extract the value from
- * @param path - The path to the value (e.g., "user.address.city")
- * @returns The value at the path or undefined if not found
+ * Extract data from a JSON object using a specified root key and path
  */
-export const getNestedValue = (obj: any, path: string): any => {
-    if (!obj || !path) return undefined;
-    
-    // Handle array indices in the path (like "geometry.coordinates.0")
-    const parts = path.split('.');
-    let current = obj;
-    
-    for (const part of parts) {
-      if (current === null || current === undefined) return undefined;
-      current = current[part];
+export function extractDataByRootKey(data: any, rootKeyData: RootKeyData): any {
+  if (!data) return null;
+  
+  if (rootKeyData.key === 'root' && Array.isArray(data)) {
+    return data;
+  }
+  
+  const pathParts = rootKeyData.path.split(/[\[\].]/).filter(Boolean);
+  let result = data;
+  
+  for (const part of pathParts) {
+    if (result === null || result === undefined) return null;
+    const index = parseInt(part);
+    if (!isNaN(index) && Array.isArray(result)) {
+      result = result[index];
+    } else {
+      result = result[part];
     }
+  }
+  
+  return result;
+}
+
+/**
+ * Extract data from a JSON object using multiple root keys
+ */
+export function extractDataByMultipleRootKeys(data: any, rootKeys: RootKeyData[]): Record<string, any> {
+  if (!data || !rootKeys || rootKeys.length === 0) return {};
+  
+  const result: Record<string, any> = {};
+  for (const rootKey of rootKeys) {
+    result[rootKey.path] = extractDataByRootKey(data, rootKey);
+  }
+  
+  return result;
+}
+
+/**
+ * Transform data for visualization
+ */
+export function transformDataForVisualization(
+  extractedData: any, 
+  parameters: string[] = []
+): Record<string, any>[] {
+  if (!extractedData || parameters.length === 0) return [];
+  
+  if (typeof extractedData === 'object' && !Array.isArray(extractedData)) {
+    const paramsByRoot: Record<string, string[]> = {};
     
-    return current;
-  };
-  
-  /**
-   * Collects all values from descendant nodes at a specific path
-   * @param obj - The object to traverse
-   * @param path - The path to collect values from
-   * @returns Array of values found at the specified path
-   */
-  export const collectDescendantValues = (obj: any, path: string): any[] => {
-    const values: any[] = [];
-  
-    const traverse = (current: any, remainingPath: string[]) => {
-      if (!current || typeof current !== 'object') return;
-  
-      if (remainingPath.length === 0) {
-        values.push(current);
+    parameters.forEach(param => {
+      if (typeof param !== 'string') {
+        console.warn('Invalid parameter type:', param);
         return;
       }
-  
-      const [currentKey, ...rest] = remainingPath;
-  
-      if (Array.isArray(current)) {
-        current.forEach(item => traverse(item, remainingPath));
-      } else {
-        if (currentKey in current) {
-          traverse(current[currentKey], rest);
-        }
-        // Also check other branches for the same path
-        Object.values(current).forEach(value => {
-          if (typeof value === 'object' && value !== null) {
-            traverse(value, remainingPath);
-          }
-        });
-      }
-    };
-  
-    traverse(obj, path.split('.'));
-    return values;
-  };
-  
-  /**
-   * Extract data from a JSON object using a root key and collect nested values
-   * @param data - The JSON data to process
-   * @param rootKey - The path to the root of the data
-   * @param nestedPaths - Array of paths to collect from each child of root
-   * @returns Processed data array or null if extraction fails
-   */
-  export const extractDataByRootKey = (
-    data: any,
-    rootKey?: string,
-    nestedPaths: string[] = []
-  ): any[] | null => {
-    if (!data) return null;
-    
-    try {
-      // Get the root node
-      const rootNode = rootKey ? getNestedValue(data, rootKey) : data;
-      if (!rootNode) return null;
-  
-      // If root is not an object, wrap in array
-      if (typeof rootNode !== 'object') {
-        return [{ value: rootNode }];
-      }
-  
-      // Get immediate children of root
-      const children = Array.isArray(rootNode) ? rootNode : Object.entries(rootNode);
-  
-      // Process each child
-      return children.map((child: any) => {
-        const childNode = Array.isArray(rootNode) ? child : child[1];
-        const childKey = Array.isArray(rootNode) ? null : child[0];
-  
-        // Start with basic node info
-        const result: Record<string, any> = {
-          key: childKey,
-          ...childNode
-        };
-  
-        // Collect values from specified nested paths
-        nestedPaths.forEach(path => {
-          const values = collectDescendantValues(childNode, path);
-          if (values.length > 0) {
-            result[path] = values;
-          }
-        });
-  
-        return result;
-      });
-    } catch (error) {
-      console.error('Error extracting data by root key:', error);
-      return null;
-    }
-  };
-  
-  /**
-   * Transforms raw data into a format suitable for visualization
-   * @param data - The raw data array
-   * @param parameters - The parameters to extract
-   * @returns Transformed data array for visualization
-   */
-  export const transformDataForVisualization = (
-    data: any[],
-    parameters: string[]
-  ): Record<string, any>[] => {
-    if (!data || !Array.isArray(data)) return [];
-    
-    return data.map((item: any, index: number) => {
-      const dataPoint: Record<string, any> = { id: index };
+
+      // Find which root this parameter belongs to
+      const rootPath = Object.keys(extractedData).find(root => 
+        param && root && param.indexOf(root + '.') === 0
+      );
       
-      // If no parameters provided, use all primitive keys
-      if (!parameters || parameters.length === 0) {
-        if (typeof item === 'object' && item !== null) {
-          Object.entries(item).forEach(([key, value]) => {
-            if (typeof value !== 'object' || value === null) {
-              dataPoint[key] = value;
-            }
-          });
-        } else {
-          dataPoint.value = item;
+      if (rootPath) {
+        // Get the relative path within that root
+        const relativePath = param.slice(rootPath.length + 1);
+        if (!paramsByRoot[rootPath]) {
+          paramsByRoot[rootPath] = [];
         }
+        paramsByRoot[rootPath].push(relativePath);
       } else {
-        // Extract values based on provided parameters
-        parameters.forEach(param => {
-          const value = getNestedValue(item, param);
-          // Use the last part of the parameter path as the key
-          const key = param.split('.').pop() || param;
-          dataPoint[key] = value;
-        });
+        if (!paramsByRoot['direct']) {
+          paramsByRoot['direct'] = [];
+        }
+        paramsByRoot['direct'].push(param);
       }
-      
-      return dataPoint;
     });
-  };
-  
-  /**
-   * Validates if the data is suitable for visualization
-   * @param data - The data to validate
-   * @param graphType - The type of graph to validate for
-   * @param parameters - The parameters to check
-   * @returns Error message or null if valid
-   */
-  export const validateDataForVisualization = (
-    data: any[],
-    graphType: string,
-    parameters: string[]
-  ): string | null => {
-    if (!data || data.length === 0) {
-      return "No data available to display";
-    }
     
-    // Check if we have the minimum required parameters for each graph type
-    switch (graphType) {
-      case 'pie':
-      case 'bar':
-        if (parameters.length < 2) {
-          return `${graphType} chart requires at least 2 parameters (label and value)`;
-        }
-        break;
-      case 'line':
-        if (parameters.length < 2) {
-          return "Line chart requires at least 2 parameters (x and y values)";
-        }
-        break;
-      case 'scatter':
-        if (parameters.length < 2) {
-          return "Scatter plot requires at least 2 parameters (x and y coordinates)";
-        }
-        break;
-    }
+    let mergedResults: Record<string, any>[] = [];
     
-    // Verify that the data has the required parameters
-    const missingParams = [];
-    for (const param of parameters) {
-      const paramKey = param.split('.').pop() || param;
-      if (!data.some(item => paramKey in item)) {
-        missingParams.push(paramKey);
+    Object.entries(paramsByRoot).forEach(([rootPath, relativeParams]) => {
+      if (rootPath === 'direct') {
+        const result = processDirectParameters(extractedData, relativeParams);
+        mergedResults = mergeResults(mergedResults, result);
+      } else {
+        const rootData = extractedData[rootPath];
+        if (rootData) {
+          const result = processRootData(rootData, relativeParams, rootPath);
+          mergedResults = mergeResults(mergedResults, result);
+        }
       }
-    }
+    });
     
-    if (missingParams.length > 0) {
-      return `Data is missing required parameter(s): ${missingParams.join(', ')}`;
-    }
+    return mergedResults;
+  }
+  
+  return processRootData(extractedData, parameters);
+}
+
+/**
+ * Process data from a specific root
+ */
+function processRootData(
+  rootData: any, 
+  parameters: string[], 
+  rootPrefix: string = ''
+): Record<string, any>[] {
+  if (Array.isArray(rootData) && rootData.length > 0 && typeof rootData[0] === 'object') {
+    return rootData.map(item => {
+      const result: Record<string, any> = {};
+      parameters.forEach(param => {
+        const paramPath = param.split('.');
+        let value = item;
+        for (const part of paramPath) {
+          if (value === null || value === undefined) break;
+          value = value[part];
+        }
+        const paramKey = rootPrefix ? `${rootPrefix}.${param}` : param;
+        result[paramKey] = value;
+      });
+      return result;
+    });
+  }
+  
+  if (typeof rootData === 'object' && rootData !== null) {
+    const firstParam = parameters[0];
+    const firstParamData = getNestedProperty(rootData, firstParam);
     
-    return null;
+    if (Array.isArray(firstParamData)) {
+      const result: Record<string, any>[] = [];
+      const arrayLength = firstParamData.length;
+      
+      for (let i = 0; i < arrayLength; i++) {
+        const record: Record<string, any> = {};
+        parameters.forEach(param => {
+          const paramData = getNestedProperty(rootData, param);
+          if (Array.isArray(paramData) && i < paramData.length) {
+            const paramKey = rootPrefix ? `${rootPrefix}.${param}` : param;
+            record[paramKey] = paramData[i];
+          }
+        });
+        result.push(record);
+      }
+      return result;
+    }
+  }
+  
+  const record: Record<string, any> = {};
+  parameters.forEach(param => {
+    const value = getNestedProperty(rootData, param);
+    const paramKey = rootPrefix ? `${rootPrefix}.${param}` : param;
+    record[paramKey] = value;
+  });
+  return [record];
+}
+
+/**
+ * Process direct parameters
+ */
+function processDirectParameters(
+  data: any, 
+  parameters: string[]
+): Record<string, any>[] {
+  const record: Record<string, any> = {};
+  parameters.forEach(param => {
+    record[param] = getNestedProperty(data, param);
+  });
+  return [record];
+}
+
+/**
+ * Merge results from multiple roots
+ */
+function mergeResults(
+  existingResults: Record<string, any>[], 
+  newResults: Record<string, any>[]
+): Record<string, any>[] {
+  if (existingResults.length === 0) return newResults;
+  if (newResults.length === 0) return existingResults;
+  
+  if (existingResults.length === newResults.length) {
+    return existingResults.map((existingItem, index) => ({
+      ...existingItem,
+      ...newResults[index]
+    }));
+  }
+  
+  const result: Record<string, any>[] = [];
+  existingResults.forEach(existingItem => {
+    newResults.forEach(newItem => {
+      result.push({
+        ...existingItem,
+        ...newItem
+      });
+    });
+  });
+  return result;
+}
+
+/**
+ * Get a nested property from an object
+ */
+function getNestedProperty(obj: any, path: string): any {
+  if (!obj || !path) return undefined;
+  const parts = path.split(/[\[\].]/).filter(Boolean);
+  let result = obj;
+  
+  for (const part of parts) {
+    if (result === null || result === undefined) return undefined;
+    const index = parseInt(part);
+    if (!isNaN(index) && Array.isArray(result)) {
+      result = result[index];
+    } else {
+      result = result[part];
+    }
+  }
+  return result;
+}
+
+/**
+ * Validate data for visualization
+ */
+export function validateDataForVisualization(
+  data: Record<string, any>[], 
+  graphType: string, 
+  parameters: string[]
+): string | null {
+  if (!data || data.length === 0) {
+    return "No data available for visualization";
+  }
+  
+  if (parameters.length === 0) {
+    return "No parameters selected for visualization";
+  }
+  
+  const firstDataItem = data[0];
+  const missingParams = parameters.filter(param => {
+    const paramName = param.includes('.') ? param.split('.').pop()! : param;
+    return !Object.keys(firstDataItem).some(key => 
+      key === param || key.endsWith(`.${paramName}`)
+    );
+  });
+  
+  if (missingParams.length > 0) {
+    return `Missing parameters in data: ${missingParams.join(', ')}`;
+  }
+  
+  switch (graphType) {
+    case 'line':
+    case 'bar':
+    case 'scatter':
+      if (parameters.length < 2) {
+        return `${graphType} charts require at least 2 parameters (x and y axis)`;
+      }
+      break;
+    case 'pie':
+      if (parameters.length < 2) {
+        return "Pie charts require at least 2 parameters (labels and values)";
+      }
+      break;
+  }
+  
+  return null;
+}
+
+/**
+ * Get parameter display name
+ */
+export function getParameterDisplayName(fullPath: string, rootKeys: RootKeyData[] = []): string {
+  for (const rootKey of rootKeys) {
+    if (fullPath.startsWith(rootKey.path + '.')) {
+      const relativePath = fullPath.substring(rootKey.path.length + 1);
+      const parts = relativePath.split('.');
+      return parts[parts.length - 1];
+    }
+  }
+  const parts = fullPath.split('.');
+  return parts[parts.length - 1];
+}
+/**
+ * Root key data interface
+ */
+export interface RootKeyData {
+  key: string;   // Display name of the key
+  path: string;  // Full path to the key
+}
+
+/**
+ * Selected node in the API data structure
+ */
+export interface SelectedNode {
+  root: string;      // Root node this selection belongs to
+  path: string[];    // Path to the node as array of keys
+  fullPath: string;  // Full path as string for display/lookups
+}
+
+/**
+ * API data structure
+ */
+export interface ApiDataStructure {
+  apiId: number;
+  userId: number;
+  apiName: string;
+  apiString: string;
+  apiKey?: string;
+  graphType: string;
+  paneX: number;
+  paneY: number;
+  parameters: string[];
+  rootKeys: RootKeyData[];
+}
+
+/**
+ * API visualization configuration
+ */
+export interface ApiVisualizationConfig {
+  graphType: string;
+  parameters: string[];
+  rootKeys: RootKeyData[];
+  dimensions: {
+    width: number;
+    height: number;
   };
+}
+
+
+
+
+
+
+
+

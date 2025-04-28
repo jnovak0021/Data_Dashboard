@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import DashboardPane from './DashboardPane';
-import { fetchUserId } from "../../utils/auth";
+import { fetchUserId } from "@/../utils/auth";
+import { RootKeyData } from '@/../utils/dataUtils';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -17,8 +18,8 @@ interface APIData {
   graphType: string;
   paneX: number;
   paneY: number;
-  parameters: (string | { parameter: string })[] | null;
-  rootKey: string;
+  parameters: string[] | null;
+  rootKeys: RootKeyData[]; // Updated to use RootKeyData
 }
 
 interface Layout {
@@ -34,7 +35,6 @@ interface Layout {
 interface DashboardProps {
   refresh: boolean;
 }
-
 
 const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   const router = useRouter();
@@ -60,8 +60,6 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
     const fetchAPIs = async () => {
       // Only proceed if we have a dashboard ID
       if (!dashboardId) {
-        // If on the home page or dashboard index page, we might not have a specific dashboard
-        // You could either leave loading as true, show a message, or handle differently
         setLoading(false);
         return;
       }
@@ -84,7 +82,37 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         const apiList = dashboardData.panes || [];
         
         console.log('Fetched APIs for dashboard:', apiList);
-        setApis(apiList);
+        
+        // Process the API list to ensure RootKeyData format
+        const processedApis = apiList.map((api: any) => {
+          // Convert old string rootKey format to new RootKeyData format if needed
+          let formattedRootKeys: RootKeyData[] = [];
+          
+          if (api.rootKey) {
+            if (Array.isArray(api.rootKey)) {
+              if (api.rootKey.length > 0) {
+                // Check if it's already in the new format or needs conversion
+                if (typeof api.rootKey[0] === 'string') {
+                  // Old format - convert to new format
+                  formattedRootKeys = api.rootKey.map((key: string) => ({ key, path: key }));
+                } else if (typeof api.rootKey[0] === 'object' && 'key' in api.rootKey[0]) {
+                  // Already in new format
+                  formattedRootKeys = api.rootKey;
+                }
+              }
+            } else if (typeof api.rootKey === 'string') {
+              // Single string rootKey - convert to array of RootKeyData
+              formattedRootKeys = [{ key: api.rootKey, path: api.rootKey }];
+            }
+          }
+          
+          return {
+            ...api,
+            rootKeys: formattedRootKeys
+          };
+        });
+        
+        setApis(processedApis);
         
         // Generate layout if no saved layout exists or if APIs have changed
         if (!layouts.lg.length || layouts.lg.length !== apiList.length) {
@@ -107,13 +135,15 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         const response = await fetch(api.apiString);
         if (!response.ok) {
           throw new Error(`Error fetching data for API ${api.apiId}: ${response.statusText}`);
+
         }
         const data = await response.json();
-        return { apiId: api.apiId, data };
+        return ({ apiId: api.apiId, data });
       } catch (err: any) {
         console.error(`Error fetching data for API ${api.apiId}:`, err.message);
         return { apiId: api.apiId, data: null };
       }
+
     };
 
     const fetchAllApiData = async () => {
@@ -275,24 +305,59 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         containerPadding={[20, 20]}
         draggableCancel=".btn-delete"
       >
-        {apis.map((api) => {
-          const apiSpecificData = apiData.find((data) => data.apiId === api.apiId)?.data;
-          return (
-            <div key={`${api.apiId}`} className="dashboard-pane-container">
-              <DashboardPane
-                index={api.apiId}
-                sizeX={api.paneX}
-                sizeY={api.paneY}
-                queryString={api.apiString}
-                graphType={api.graphType || 'pie'}
-                parameters={api.parameters?.map((p) => (typeof p === 'object' && 'parameter' in p ? p.parameter : p)) || []}
-                apiData={apiSpecificData}
-                onDelete={handleDeletePane}
-                rootKey = {api.rootKey}
-              />
-            </div>
-          );
-        })}
+{apis.map((api) => {
+  const apiSpecificData = apiData.find((data) => data.apiId === api.apiId)?.data;
+
+  // 🔵 Print rootKeys
+  console.log(`RootKeys for API ${api.apiName} (${api.apiId}):`);
+  if (Array.isArray(api.rootKeys)) {
+    api.rootKeys.forEach((rk, idx) => {
+      if (typeof rk === 'string') {
+        console.log(`  RootKey ${idx}: key = ${rk}, path = ${rk}`);
+      } else if (typeof rk === 'object' && 'key' in rk && 'path' in rk) {
+        console.log(`  RootKey ${idx}: key = ${rk.key}, path = ${rk.path}`);
+      } else {
+        console.log(`  RootKey ${idx}: Unexpected format`, rk);
+      }
+    });
+  } else {
+    console.log('  rootKeys is not an array:', api.rootKeys);
+  }
+
+  // 🟢 Print parameters
+  console.log(`Parameters for API ${api.apiName} (${api.apiId}):`);
+  if (Array.isArray(api.parameters)) {
+    api.parameters.forEach((param, idx) => {
+      if (typeof param === 'string') {
+        console.log(`  Parameter ${idx}: ${param}`);
+      } else if (typeof param === 'object' && 'parameter' in param) {
+        console.log(`  Parameter ${idx}: ${param.parameter}`);
+      } else {
+        console.log(`  Parameter ${idx}: Unexpected format`, param);
+      }
+    });
+  } else {
+    console.log('  parameters is not an array:', api.parameters);
+  }
+
+  return (
+    <div key={`${api.apiId}`} className="dashboard-pane-container">
+      <DashboardPane
+        index={api.apiId}
+        apiName={api.apiName}
+        sizeX={api.paneX}
+        sizeY={api.paneY}
+        queryString={api.apiString}
+        graphType={api.graphType || 'pie'}
+        parameters={api.parameters || []}
+        apiData={apiSpecificData}
+        onDelete={handleDeletePane}
+        rootKeys={api.rootKeys || []}
+      />
+    </div>
+  );
+})}
+
       </ResponsiveGridLayout>
     </div>
   );

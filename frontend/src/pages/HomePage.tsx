@@ -21,7 +21,7 @@ const HomePage = ({ userEmail, onLogout }: HomePageProps) => {
     <DashboardLayout userEmail={userEmail} onLogout={onLogout}>
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">Welcome to Your Dashboard</h1>
-        <APIFormDialog onFormSubmit={handleFormSubmit} />
+        <APIFormDialog onFormSubmit={handleFormSubmit} editMode={false} />
         <div className="bg-white shadow-lg rounded-lg p-6">
           <Dashboard refresh={refreshDashboard} />
         </div>

@@ -1,11 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { CiCircleMinus } from "react-icons/ci";
-import { HelpCircle } from "lucide-react";
+import { MdModeEdit } from "react-icons/md";
 import PieGraph from './GraphTypes/PieGraph';
 import LineGraph from './GraphTypes/LineGraph';
 import ScatterPlot from './GraphTypes/ScatterPlot';
 import BarGraph from './GraphTypes/BarGraph';
-import { extractDataByRootKey, transformDataForVisualization, validateDataForVisualization } from '@/../utils/dataUtils';
+import { 
+  extractDataByRootKey, 
+  extractDataByMultipleRootKeys, 
+  transformDataForVisualization, 
+  validateDataForVisualization,
+  RootKeyData 
+} from '@/../utils/dataUtils';
+import APIFormDialog from './APIFormDialog';
 
 interface DashboardPaneProps {
   index: number;
@@ -13,9 +20,9 @@ interface DashboardPaneProps {
   sizeY: number;
   queryString: string;
   graphType: string;
-  parameters?: string[];
+  parameters: string[];
   apiData: any;
-  rootKey: string;
+  rootKeys: RootKeyData[] | string[]; // Support both new and old format
   apiName?: string;
   onDelete?: (id: number) => void;
 }
@@ -28,7 +35,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
   graphType, 
   parameters = [],
   apiData,
-  rootKey,
+  rootKeys = [],
   apiName,
   onDelete
 }) => {
@@ -38,6 +45,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   // Update dimensions when container size changes
   useEffect(() => {
@@ -66,6 +74,41 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
   }, []);
 
+//   useEffect(() => {
+//   console.log("===== Printing rootKeys =====");
+
+//   if (Array.isArray(rootKeys)) {
+//     rootKeys.forEach((rk, idx) => {
+//       if (typeof rk === 'string') {
+//         console.log(`RootKey ${idx}: key = ${rk}, path = ${rk}`);
+//       } else if (typeof rk === 'object' && 'key' in rk && 'path' in rk) {
+//         console.log(`RootKey ${idx}: key = ${rk.key}, path = ${rk.path}`);
+//       } else {
+//         console.log(`RootKey ${idx}: Unexpected format`, rk);
+//       }
+//     });
+//   } else {
+//     console.log('rootKeys is not an array:', rootKeys);
+//   }
+
+//   console.log("===== Printing parameters =====");
+
+//   if (Array.isArray(parameters)) {
+//     parameters.forEach((param, idx) => {
+//       if (typeof param === 'string') {
+//         console.log(`Parameter ${idx}: ${param}`);
+//       } else if (typeof param === 'object' && 'parameter' in param) {
+//         console.log(`Parameter ${idx}: ${param.parameter}`);
+//       } else {
+//         console.log(`Parameter ${idx}: Unexpected format`, param);
+//       }
+//     });
+//   } else {
+//     console.log('parameters is not an array:', parameters);
+//   }
+// }, [rootKeys, parameters]);
+
+
   // Process the API data or fetch from queryString
   useEffect(() => {
     const processApiData = async () => {
@@ -91,13 +134,40 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
           throw new Error("No data source provided");
         }
 
-        // Extract data based on root key
-        const extractedData = extractDataByRootKey(jsonData, rootKey);
-        if (!extractedData) {
-          throw new Error(`Failed to extract data using root key: ${rootKey}`);
+        // Convert old string rootKeys format to new RootKeyData format if needed
+        let formattedRootKeys: RootKeyData[] = [];
+        if (rootKeys.length > 0) {
+          if (typeof rootKeys[0] === 'string') {
+            // Old format - convert to new format
+            formattedRootKeys = (rootKeys as string[]).map(key => ({ key, path: key }));
+          } else {
+            // Already in new format
+            formattedRootKeys = rootKeys as RootKeyData[];
+          }
         }
 
-        // Transform data for visualization
+        let extractedData;
+        
+        // Handle multiple root keys if available
+        if (formattedRootKeys.length > 1) {
+          // Extract data using multiple root keys
+          extractedData = extractDataByMultipleRootKeys(jsonData, formattedRootKeys);
+          
+          // Merge root data as needed for visualization
+          // The transformDataForVisualization function will handle combining data from multiple roots
+        } else if (formattedRootKeys.length === 1) {
+          // Single root key
+          extractedData = extractDataByRootKey(jsonData, formattedRootKeys[0]);
+        } else {
+          // No root keys, use entire JSON
+          extractedData = jsonData;
+        }
+        
+        if (!extractedData) {
+          throw new Error("Failed to extract data from JSON");
+        }
+
+        // Transform data for visualization with full parameter paths
         const transformedData = transformDataForVisualization(extractedData, parameters);
         
         // Validate data for the specific graph type
@@ -118,7 +188,12 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
 
     processApiData();
-  }, [apiData, queryString, rootKey, parameters, graphType]);
+  }, [apiData, queryString, rootKeys, parameters, graphType]);
+
+  const handleFormSubmit = () => {
+    setIsDialogOpen(false);
+    // Refresh data or update pane as needed
+  };
 
   // Handle delete button click
   const handleDelete = async (e: React.MouseEvent) => {
@@ -152,10 +227,19 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     }
   };
 
+  // // Get display name for a parameter, stripping any root key prefix
+  // const getParameterDisplayName = (param: string): string => {
+  //   const parts = param.split('.');
+  //   return parts[parts.length - 1];
+  // };
+  const getParameterName = (param: string | { parameter: string }) => {
+    if (typeof param === 'string') return param;
+    return param.parameter;
+  };
   // Generate title based on parameters and graph type
   const getVisTitle = () => {
     if (parameters && parameters.length >= 2) {
-      const displayParams = parameters.map(p => p.split('.').pop()).filter(Boolean);
+      const displayParams = parameters.map(param => getParameterName(param).split('.').pop() || '');
       return `${displayParams[0]} vs ${displayParams[1]}`;
     }
     return apiName || 'Data Visualization';
@@ -166,7 +250,22 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       ref={containerRef}
       className="pane relative w-full h-full border border-gray-300 bg-white p-4 rounded-lg shadow overflow-hidden group transition-all hover:shadow-md"
     >
-      {/* Delete button with explicit styling to ensure visibility */}
+      
+      {/* Edit button */}
+      <span className="absolute top-2 right-10 z-50 bg-blue-500 hover:bg-blue-700 text-white rounded-full p-1 transition-all opacity-0 group-hover:opacity-100">
+        <button onClick={() => setIsDialogOpen(true)}>
+          <MdModeEdit size={20} />
+        </button>
+      </span>
+
+      {isDialogOpen && (
+        <APIFormDialog 
+          onFormSubmit={handleFormSubmit} 
+          editMode={true} 
+        />
+      )}
+      
+      {/* Delete button */}
       {onDelete && (
         <button 
           className={`btn-delete absolute top-2 right-2 z-50 ${
@@ -182,12 +281,19 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       
       {/* Main content */}
       <div className="w-full h-full flex flex-col">
-        {/* Title based on parameters or default */}
-        <div className="mb-3 text-lg font-semibold text-gray-700">
-          {getVisTitle()}
+        <div className="mb-3 text-lg font-bold text-gray-700"> 
+          {apiName}
+        </div>
+        
+        <div className="mb-3 text-md font-semibold text-gray-700">
+          {/* {getVisTitle()} */}
         </div>
       
         <div className="flex-1 flex items-center justify-center">
+          ROOTS:
+          
+          JSON:
+          {JSON.stringify(data)}
           {loading ? (
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
