@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import DashboardPane from './DashboardPane';
-import { fetchUserId } from "../../utils/auth";
+import { fetchUserId } from '../../utils/auth';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
+import MapPane from './MapPane';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -35,229 +36,160 @@ interface DashboardProps {
   refresh: boolean;
 }
 
-
 const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   const router = useRouter();
-  const { id: dashboardId } = router.query;
-  
+  const id = router.query.id;
+  const dashboardId = Array.isArray(id) ? id[0] : id;
+
   const [apis, setApis] = useState<APIData[]>([]);
   const [apiData, setApiData] = useState<{ apiId: number; data: any }[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState(0);
-  const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>(() => {
-    // Try to load saved layouts from localStorage
-    if (typeof window !== 'undefined' && dashboardId) {
-      const layoutKey = `dashboardLayout_${dashboardId}`;
-      const savedLayouts = localStorage.getItem(layoutKey);
-      return savedLayouts ? JSON.parse(savedLayouts) : { lg: [], md: [], sm: [], xs: [] };
-    }
-    return { lg: [], md: [], sm: [], xs: [] };
-  });
+  const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>({ lg: [], md: [], sm: [], xs: [] });
+  const [forceRefresh, setForceRefresh] = useState(false);
 
-  // Fetch the list of APIs based on dashboard ID
-  useEffect(() => {
-    const fetchAPIs = async () => {
-      // Only proceed if we have a dashboard ID
-      if (!dashboardId) {
-        // If on the home page or dashboard index page, we might not have a specific dashboard
-        // You could either leave loading as true, show a message, or handle differently
-        setLoading(false);
+  // Fetch APIs function
+  const fetchAPIs = useCallback(async () => {
+    if (!dashboardId) return;
+
+    try {
+      const fetchedUserId = await fetchUserId();
+      if (fetchedUserId === null) {
+        console.warn('No user ID found');
         return;
       }
-      
-      try {
-        setLoading(true);
-        const fetchedUserId = await fetchUserId();
-        if (fetchedUserId === null) {
-          throw new Error('Failed to fetch user ID');
-        }
-        setUserId(fetchedUserId);
+      setUserId(fetchedUserId);
 
-        // Fetch dashboard details to get its panes
-        const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
-        if (!response.ok) {
-          throw new Error(`Error fetching dashboard: ${response.statusText}`);
-        }
-        
+      const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
+      if (response.ok) {
         const dashboardData = await response.json();
         const apiList = dashboardData.panes || [];
-        
-        console.log('Fetched APIs for dashboard:', apiList);
         setApis(apiList);
-        
-        // Generate layout if no saved layout exists or if APIs have changed
-        if (!layouts.lg.length || layouts.lg.length !== apiList.length) {
-          generateInitialLayout(apiList);
-        }
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchAPIs();
-  }, [refresh, dashboardId]);
 
-  // Fetch data for each API
+        if (!apiList.length) {
+          console.warn('No API panes found.');
+        }
+
+        generateInitialLayout(apiList);
+      } else {
+        console.warn('Dashboard not found, rendering fallback layout.');
+      }
+    } catch (err) {
+      console.error('Error fetching dashboard APIs:', err);
+    }
+  }, [dashboardId]);
+
+  // Initial fetch
   useEffect(() => {
-    const getApiData = async (api: APIData) => {
-      try {
-        const response = await fetch(api.apiString);
-        if (!response.ok) {
-          throw new Error(`Error fetching data for API ${api.apiId}: ${response.statusText}`);
-        }
-        const data = await response.json();
-        return { apiId: api.apiId, data };
-      } catch (err: any) {
-        console.error(`Error fetching data for API ${api.apiId}:`, err.message);
-        return { apiId: api.apiId, data: null };
-      }
+    fetchAPIs();
+  }, [fetchAPIs, refresh, forceRefresh]);
+
+  // Listen for dashboard update events
+  useEffect(() => {
+    const handleDashboardUpdate = () => {
+      console.log("Dashboard update event received, refreshing data...");
+      setForceRefresh(prev => !prev); // Toggle to force re-render
     };
 
+    window.addEventListener('dashboard-update', handleDashboardUpdate);
+    
+    return () => {
+      window.removeEventListener('dashboard-update', handleDashboardUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
     const fetchAllApiData = async () => {
       if (apis.length > 0) {
-        try {
-          const results = await Promise.all(apis.map((api) => getApiData(api)));
-          console.log('Fetched API Data:', results);
-          setApiData(results);
-        } catch (err) {
-          console.error('Error fetching API data:', err);
-        }
+        const results = await Promise.all(apis.map(async (api) => {
+          try {
+            const response = await fetch(api.apiString);
+            if (response.ok) {
+              const data = await response.json();
+              return { apiId: api.apiId, data };
+            } else {
+              throw new Error('API fetch failed');
+            }
+          } catch (err) {
+            console.error(`Failed fetching data for API ${api.apiId}`, err);
+            return { apiId: api.apiId, data: null };
+          }
+        }));
+        setApiData(results);
       }
     };
 
     fetchAllApiData();
   }, [apis]);
 
-  // Save layouts to localStorage whenever they change
   useEffect(() => {
-    if (typeof window !== 'undefined' && layouts.lg.length > 0 && dashboardId) {
+    if (dashboardId && layouts.lg.length) {
       const layoutKey = `dashboardLayout_${dashboardId}`;
       localStorage.setItem(layoutKey, JSON.stringify(layouts));
     }
   }, [layouts, dashboardId]);
 
-  // Generate initial layout based on APIs
   const generateInitialLayout = (apiList: APIData[]) => {
-    const lgLayout: Layout[] = [];
-    const mdLayout: Layout[] = [];
-    const smLayout: Layout[] = [];
-    const xsLayout: Layout[] = [];
-    
-    apiList.forEach((api, index) => {
-      // Calculate size in grid units (1 grid unit = 50px by default)
-      const w = Math.max(Math.ceil(api.paneX / 100), 3); // Min width of 3
-      const h = Math.max(Math.ceil(api.paneY / 100), 3); // Min height of 3
-      
-      // Add to layouts for different breakpoints
-      lgLayout.push({
+    const makeLayout = (breakpoint: string) => {
+      return apiList.map((api, index) => ({
         i: `${api.apiId}`,
         x: (index % 3) * 3,
         y: Math.floor(index / 3) * 3,
-        w,
-        h,
+        w: Math.max(Math.ceil(api.paneX / 100), 3),
+        h: Math.max(Math.ceil(api.paneY / 100), 3),
         minW: 2,
-        minH: 2
-      });
-      
-      mdLayout.push({
-        i: `${api.apiId}`,
-        x: (index % 2) * 3,
-        y: Math.floor(index / 2) * 3,
-        w,
-        h,
-        minW: 2,
-        minH: 2
-      });
-      
-      smLayout.push({
-        i: `${api.apiId}`,
-        x: 0,
-        y: index * 3,
-        w: 6,
-        h,
-        minW: 2,
-        minH: 2
-      });
-      
-      xsLayout.push({
-        i: `${api.apiId}`,
-        x: 0,
-        y: index * 3,
-        w: 4,
-        h,
-        minW: 2,
-        minH: 2
-      });
+        minH: 2,
+      }));
+    };
+
+    setLayouts({
+      lg: makeLayout('lg'),
+      md: makeLayout('md'),
+      sm: makeLayout('sm'),
+      xs: makeLayout('xs'),
     });
-    
-    setLayouts({ lg: lgLayout, md: mdLayout, sm: smLayout, xs: xsLayout });
   };
 
-  // Handle layout changes
-  const onLayoutChange = (currentLayout: Layout[], allLayouts: { [key: string]: Layout[] }) => {
+  const onLayoutChange = (_: Layout[], allLayouts: { [key: string]: Layout[] }) => {
     setLayouts(allLayouts);
   };
 
-  // Handle pane deletion
   const handleDeletePane = async (apiId: number) => {
-    if (!confirm(`Are you sure you want to delete this pane?`)) {
-      return;
-    }
-    
-    console.log(`Deleting pane with ID: ${apiId}`);
-    
-    // Remove the association between dashboard and API if we have a dashboard ID
-    if (dashboardId) {
-      try {
+    if (!confirm('Are you sure you want to delete this pane? This action cannot be undone.')) return;
+
+    try {
+      if (dashboardId) {
         const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes/${apiId}`, {
           method: 'DELETE',
         });
         
         if (!response.ok) {
-          throw new Error(`Failed to remove pane from dashboard: ${response.statusText}`);
+          throw new Error(`Failed to delete pane: ${response.statusText}`);
         }
-      } catch (error) {
-        console.error('Error removing pane from dashboard:', error);
+        
+        console.log(`Pane ${apiId} deleted successfully`);
       }
+      
+      // Update local state to reflect the deletion
+      setApis(prev => prev.filter(api => api.apiId !== apiId));
+      setApiData(prev => prev.filter(data => data.apiId !== apiId));
+      
+      // Update layouts
+      setLayouts(prev => {
+        const newLayouts = { ...prev };
+        Object.keys(newLayouts).forEach(key => {
+          newLayouts[key] = newLayouts[key].filter(item => item.i !== `${apiId}`);
+        });
+        return newLayouts;
+      });
+      
+      // Force refresh the entire dashboard
+      fetchAPIs();
+      
+    } catch (error) {
+      console.error('Error deleting pane:', error);
+      alert('Failed to delete pane. Please try again.');
     }
-    
-    // Update APIs state - remove the deleted API
-    setApis(prevApis => prevApis.filter(api => api.apiId !== apiId));
-    
-    // Update apiData state - remove the deleted API data
-    setApiData(prevData => prevData.filter(data => data.apiId !== apiId));
-    
-    // Update layouts state - remove the layout item with matching ID
-    setLayouts(prevLayouts => {
-      const newLayouts = { ...prevLayouts };
-      
-      // For each breakpoint (lg, md, sm, xs), filter out the layout item
-      for (const breakpoint in newLayouts) {
-        if (Object.prototype.hasOwnProperty.call(newLayouts, breakpoint)) {
-          newLayouts[breakpoint] = newLayouts[breakpoint].filter(
-            item => item.i !== `${apiId}`
-          );
-        }
-      }
-      
-      return newLayouts;
-    });
   };
-  
-  if (loading) {
-    return <div className="flex justify-center items-center h-64">Loading...</div>;
-  }
-
-  if (error) {
-    return <div className="text-red-500 p-4">Error: {error}</div>;
-  }
-  
-  if (!dashboardId) {
-    return <div className="text-center p-4">No dashboard selected</div>;
-  }
 
   return (
     <div className="dashboard-container">
@@ -268,15 +200,24 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         cols={{ lg: 12, md: 9, sm: 6, xs: 4 }}
         rowHeight={50}
         onLayoutChange={onLayoutChange}
-        isDraggable={true}
-        isResizable={true}
+        isDraggable
+        isResizable
         compactType="vertical"
         margin={[20, 20]}
         containerPadding={[20, 20]}
-        draggableCancel=".btn-delete"
       >
+        {/* MapPane always for dashboard 1 */}
+        {dashboardId === '1' && (
+          <div key="map-pane" className="dashboard-pane-container" data-grid={{ x: 0, y: 0, w: 6, h: 6, minW: 4, minH: 4 }}>
+            <div className="pane relative w-full h-full border border-blue-400 bg-white p-4 rounded-lg shadow overflow-hidden">
+              <div className="mb-3 text-lg font-semibold text-gray-700">Map View</div>
+              <MapPane />
+            </div>
+          </div>
+        )}
+
         {apis.map((api) => {
-          const apiSpecificData = apiData.find((data) => data.apiId === api.apiId)?.data;
+          const apiSpecificData = apiData.find(d => d.apiId === api.apiId)?.data;
           return (
             <div key={`${api.apiId}`} className="dashboard-pane-container">
               <DashboardPane
@@ -285,10 +226,11 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
                 sizeY={api.paneY}
                 queryString={api.apiString}
                 graphType={api.graphType || 'pie'}
-                parameters={api.parameters?.map((p) => (typeof p === 'object' && 'parameter' in p ? p.parameter : p)) || []}
+                parameters={api.parameters?.map(p => (typeof p === 'object' ? p.parameter : p)) || []}
                 apiData={apiSpecificData}
+                rootKey={api.rootKey}
+                apiName={api.apiName}
                 onDelete={handleDeletePane}
-                rootKey = {api.rootKey}
               />
             </div>
           );
