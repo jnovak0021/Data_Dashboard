@@ -8,18 +8,22 @@ export function transformDataForVisualization(data: any, parameters: string[] = 
   let arrayData = Array.isArray(data) ? data : findFirstArray(data);
   if (!arrayData) return [];
 
-  // Extract the parameter names (last part of the path)
-  const paramNames = parameters.map(param => {
-    const parts = param.split('.');
-    return parts[parts.length - 1];
-  });
-
   // Transform the data
   return arrayData.map(item => {
     const record: Record<string, any> = {};
-    parameters.forEach((fullPath, index) => {
-      const value = getValueFromPath(item, fullPath);
-      record[parameters[index]] = value;
+    parameters.forEach(param => {
+      // Get the last part of the parameter path
+      const parts = param.split('.');
+      const lastPart = parts[parts.length - 1];
+      
+      // If the item directly has the lastPart as a key, use that value
+      if (item.hasOwnProperty(lastPart)) {
+        record[param] = item[lastPart];
+      } else {
+        // Otherwise, try to find the value in nested objects
+        const value = findValueByKey(item, lastPart);
+        record[param] = value;
+      }
     });
     return record;
   });
@@ -42,18 +46,27 @@ function findFirstArray(data: any): any[] | null {
 }
 
 /**
- * Get a value from a nested path
+ * Find a value by key name in an object or its nested objects
  */
-function getValueFromPath(obj: any, path: string): any {
-  const parts = path.split('.');
-  let current = obj;
-
-  for (const part of parts) {
-    if (!current) return undefined;
-    current = current[part];
+function findValueByKey(obj: any, key: string): any {
+  if (!obj || typeof obj !== 'object') return undefined;
+  
+  // Direct property match
+  if (obj.hasOwnProperty(key)) {
+    return obj[key];
   }
 
-  return current;
+  // Search in nested objects
+  for (const k in obj) {
+    if (typeof obj[k] === 'object') {
+      const value = findValueByKey(obj[k], key);
+      if (value !== undefined) {
+        return value;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 /**

@@ -10,7 +10,7 @@ interface GraphProps {
 }
 
 const LineGraph: React.FC<GraphProps> = ({ data, parameters }) => {
-  console.log("LineGraph data:", data); // Log the data passed to the LineGraph
+  //console.log("LineGraph data:", data); // Log the data passed to the LineGraph
 
   if (!data || data.length === 0) return <div>No data available</div>;
   if (!parameters || parameters.length < 2) {
