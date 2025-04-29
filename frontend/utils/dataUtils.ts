@@ -24,7 +24,7 @@ export function transformDataForVisualization(data: any, parameters: string[] = 
   }
   
   // Now process all arrays
-  if (rootKeys.length > 1) {
+  if (rootKeys.length > 1 && parameters.length === rootKeys.length) {
     // Merge by index across all root arrays
     const maxLength = Math.max(...rootArrays.map(arr => arr.length));
   
@@ -33,7 +33,7 @@ export function transformDataForVisualization(data: any, parameters: string[] = 
   
       rootArrays.forEach((arrayData, idx) => {
         const value = arrayData[i];
-        const key = rootKeys[idx];
+        const key = parameters[idx]; // We use parameters here because the graph needs it when matching the names up.
         record[key] = value;
       });
   
