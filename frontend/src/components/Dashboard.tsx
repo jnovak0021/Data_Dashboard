@@ -216,7 +216,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         {apis.map((api) => {
           console.log(
             `Rendering pane for API ${api.apiName} (${api.apiId}):`,
-            apiData.find((data) => data.apiId === api.apiId)?.data
+            //apiData.find((data) => data.apiId === api.apiId)?.data
           );
           return (
             <div key={api.apiId}>

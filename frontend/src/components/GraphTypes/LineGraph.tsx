@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088fe', '#00c49f'];
@@ -8,7 +8,10 @@ interface GraphProps {
   sizeY: number;
   parameters: string[];
 }
+
 const LineGraph: React.FC<GraphProps> = ({ data, parameters }) => {
+  console.log("LineGraph data:", data); // Log the data passed to the LineGraph
+
   if (!data || data.length === 0) return <div>No data available</div>;
   if (!parameters || parameters.length < 2) {
     return <div>Invalid parameters. Please provide at least two parameters.</div>;
