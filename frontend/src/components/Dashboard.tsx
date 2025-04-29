@@ -45,6 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState(0);
   const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>({ lg: [], md: [], sm: [], xs: [] });
+  const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE;  //contant for the baseURL
 
   useEffect(() => {
     const fetchAPIs = async () => {
@@ -61,7 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         }
         setUserId(fetchedUserId);
 
-        const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
+        const response = await fetch(`${BASE_URL}/api/go/dashboards/${dashboardId}`);
         if (!response.ok) {
           throw new Error(`Error fetching dashboard: ${response.statusText}`);
         }
@@ -167,7 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
 
     if (dashboardId) {
       try {
-        const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes/${apiId}`, {
+        const response = await fetch(`${BASE_URL}/api/go/dashboards/${dashboardId}/panes/${apiId}`, {
           method: 'DELETE',
         });
 

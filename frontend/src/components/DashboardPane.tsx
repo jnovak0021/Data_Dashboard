@@ -45,6 +45,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [stringParams,setStringParams] = useState<string[]>([]);
+  const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE;  //contant for the baseURL
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -115,10 +116,15 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
         const normalizedParams = parameters.map(p => 
           typeof p === 'string' ? p : p.parameter
         );
+        //removes all falsy data
         setStringParams(normalizedParams);
+        console.log("NROMALIZED");
+        console.log(normalizedParams);
+        console.log("EXTRACTED DATA");
+        console.log(extractedData);
 
         const transformedData = transformDataForVisualization(extractedData, normalizedParams);
-        
+
         if (!transformedData || transformedData.length === 0) {
           throw new Error("Failed to transform data for visualization");
         }
@@ -131,7 +137,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
           throw new Error(validationError);
         }
 
-        setData(transformedData);
+        setData(extractedData);
         setError(null);
       } catch (error) {
         console.error('Error processing data:', error);
@@ -159,7 +165,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     console.log(`Attempting to delete pane with index: ${index}`);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/go/deleteAPI/${index}`, {
+      const response = await fetch(`${BASE_URL}/api/go/deleteAPI/${index}`, {
         method: 'DELETE',
       });
       
@@ -244,6 +250,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
               <p>{error}</p>
             </div>
           ) : data && data.length > 0 ? (
+            // graphType ===
             graphType === "pie" ? (
               <PieGraph 
                 data={data} 

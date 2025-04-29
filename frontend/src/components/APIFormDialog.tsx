@@ -35,6 +35,8 @@ export default function APIFormDialog({ onFormSubmit, editMode }: APIFormDialogP
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedParams, setSelectedParams] = useState<string[]>([]);
   const [apiKeyParam, setApiKeyParam] = useState('apikey');
+  const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE;  //contant for the baseURL
+
 
   const handleSelectParameters = (parameters: string[]) => {
     setSelectedParams(parameters);
@@ -64,7 +66,7 @@ export default function APIFormDialog({ onFormSubmit, editMode }: APIFormDialogP
   const createAPI = async (jsonString: string) => {
     try {
       console.log("Creating API with data:", jsonString);
-      const res = await fetch(`http://localhost:8000/api/go/createAPI`, {
+      const res = await fetch(`${BASE_URL}/api/go/createAPI`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: jsonString,
@@ -96,7 +98,7 @@ export default function APIFormDialog({ onFormSubmit, editMode }: APIFormDialogP
   
   const addAPIToDashboard = async (dashboardId: string, apiId: number) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes`, {
+      const res = await fetch(`${BASE_URL}/api/go/dashboards/${dashboardId}/panes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiId }),

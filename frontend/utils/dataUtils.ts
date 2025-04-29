@@ -4,10 +4,13 @@
 export function extractDataByRootKey(data: any, rootKey: string): any {
   if (!data) return null;
   
+
+  //check to see if the root is just at the top level
   if (rootKey === 'root' && Array.isArray(data)) {
     return data;
   }
   
+
   const pathParts = rootKey.split(/[\[\].]/).filter(Boolean);
   let result = data;
   
@@ -20,7 +23,8 @@ export function extractDataByRootKey(data: any, rootKey: string): any {
       result = result[part];
     }
   }
-  
+  // console.log("EXTRACTING ROOT OF A SINGLE KEY");
+  // console.log(result);
   return result;
 }
 
@@ -34,7 +38,8 @@ export function extractDataByMultipleRootKeys(data: any, rootKeys: string[]): Re
   for (const rootKey of rootKeys) {
     result[rootKey] = extractDataByRootKey(data, rootKey);
   }
-  
+  // console.log("EXTRACTING ROOT OF A MUTPLE KEY");
+  // console.log(result);
   return result;
 }
 
@@ -42,12 +47,14 @@ export function extractDataByMultipleRootKeys(data: any, rootKeys: string[]): Re
  * Transform data for visualization
  */
 export function transformDataForVisualization(extractedData: any, parameters: string[] = []): Record<string, any>[] {
+  console.log("tarnsformdataforvisualization for the parameters:\t" + parameters);
+  
   if (!extractedData || parameters.length === 0) return [];
-
+  console.log("1");
   // Handle case where extracted data is an object with multiple roots
   if (typeof extractedData === 'object' && !Array.isArray(extractedData)) {
     const paramsByRoot: Record<string, string[]> = {};
-    
+    console.log("2");
     // Group parameters by their root keys
     parameters.forEach(param => {
       const rootKey = Object.keys(extractedData).find(root => 
@@ -55,6 +62,7 @@ export function transformDataForVisualization(extractedData: any, parameters: st
       );
       
       if (rootKey) {
+        console.log("3");
         if (!paramsByRoot[rootKey]) {
           paramsByRoot[rootKey] = [];
         }
@@ -70,7 +78,7 @@ export function transformDataForVisualization(extractedData: any, parameters: st
     });
 
     let results: Record<string, any>[] = [];
-    
+    console.log("4");
     // Process each root's data
     Object.entries(paramsByRoot).forEach(([rootKey, rootParams]) => {
       if (rootKey === 'direct') {
@@ -83,7 +91,10 @@ export function transformDataForVisualization(extractedData: any, parameters: st
           const rootResults = rootData.map(item => {
             const record: Record<string, any> = {};
             rootParams.forEach(param => {
+              // console.log("VALUE");
               const value = getNestedProperty(item, param);
+              // console.log(value);
+
               record[`${rootKey}.${param}`] = value;
             });
             return record;
@@ -273,6 +284,6 @@ export function getParameterDisplayName(fullPath: string, rootKeys: string[] = [
 
 //checks for falsy data types or if the array is empty and returns valid empty array
 export function normalizeRootKeys(rootKeys: string[]): string[] {
-  if (!rootKeys || rootKeys.length === 0) return ["EMPTY"];
+  if (!rootKeys || rootKeys.length === 0) return [];
   return rootKeys;
 }
