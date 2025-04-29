@@ -90,21 +90,18 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
           typeof p === 'string' ? p : p.parameter
         );
         setStringParams(normalizedParams);
-        console.log("DATA BEFORE TRANSFORMATION");
-        console.log(jsonData);
+      
+        const transformedData = transformDataForVisualization(jsonData, normalizedParams, rootKeys);        
 
-        const transformedData = transformDataForVisualization(jsonData, normalizedParams);
-        console.log("DATA AFTER TRANSFORMATION");
-        console.log(transformedData);
         if (!transformedData?.length) {
           throw new Error("Failed to transform data for visualization");
         }
 
         const validationError = validateDataForVisualization(transformedData, graphType, normalizedParams);
-        if (validationError) {
-          throw new Error(validationError);
+        if (validationError) {          
+          throw new Error(validationError);          
         }
-
+ 
         setData(transformedData);
         setError(null);
       } catch (error) {
