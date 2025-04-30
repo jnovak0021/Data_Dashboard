@@ -1,208 +1,155 @@
 /**
- * Utility functions for handling JSON data in visualizations
+ * Extract and transform data for visualization based on root and parameters
  */
+export function transformDataForVisualization(data: any, parameters: string[] = [], rootKeys: string[] = []): Record<string, any>[] {
+  if (!data || !parameters.length) return [];
+
+  let allRecords: Record<string, any>[] = [];
+
+  const rootArrays: any[][] = [];
+
+  // Depending on how many root keys we have, we'll create a subarray for each
+  if (rootKeys.length > 0) {
+    // Multiple root arrays
+    rootKeys.forEach(key => {
+      const subArray = Array.isArray(data) ? data : findArrayByKey(data, key);      
+      if (Array.isArray(subArray)) {
+        rootArrays.push(subArray);
+      }
+    });
+  } else {
+    // Single root array
+    const arrayData = Array.isArray(data) ? data : findFirstArray(data);
+    if (arrayData) rootArrays.push(arrayData);
+  }
+  
+  // Now process all arrays
+  if (rootKeys.length > 1 && parameters.length === rootKeys.length) {
+    // Merge by index across all root arrays
+    const maxLength = Math.max(...rootArrays.map(arr => arr.length));
+  
+    for (let i = 0; i < maxLength; i++) {
+      const record: Record<string, any> = {};
+  
+      rootArrays.forEach((arrayData, idx) => {
+        const value = arrayData[i];
+        const key = parameters[idx]; // We use parameters here because the graph needs it when matching the names up.
+        record[key] = value;
+      });
+  
+      allRecords.push(record);
+    }
+  
+  } else {
+    // Single array case
+    rootArrays.forEach(arrayData => {
+      arrayData.forEach(item => {
+        const record: Record<string, any> = {};
+  
+        parameters.forEach(param => {
+          const parts = param.split('.');
+          const lastPart = parts[parts.length - 1];
+                
+          if (item.hasOwnProperty(lastPart)) {        
+            record[param] = item[lastPart];          
+          } else {          
+            const value = findValueByKey(item, lastPart);
+            record[param] = value;
+          }
+        });
+  
+        allRecords.push(record);
+      });
+    });
+  }
+  
+  return allRecords;
+}
+
 
 /**
- * Gets a nested value from an object using a path string
- * @param obj - The object to extract the value from
- * @param path - The path to the value (e.g., "user.address.city")
- * @returns The value at the path or undefined if not found
+ * Find the first array in a nested structure
  */
-export const getNestedValue = (obj: any, path: string): any => {
-    if (!obj || !path) return undefined;
-    
-    // Handle array indices in the path (like "geometry.coordinates.0")
-    const parts = path.split('.');
-    let current = obj;
-    
-    for (const part of parts) {
-      if (current === null || current === undefined) return undefined;
-      current = current[part];
-    }
-    
-    return current;
-  };
-  
-  /**
-   * Collects all values from descendant nodes at a specific path
-   * @param obj - The object to traverse
-   * @param path - The path to collect values from
-   * @returns Array of values found at the specified path
-   */
-  export const collectDescendantValues = (obj: any, path: string): any[] => {
-    const values: any[] = [];
-  
-    const traverse = (current: any, remainingPath: string[]) => {
-      if (!current || typeof current !== 'object') return;
-  
-      if (remainingPath.length === 0) {
-        values.push(current);
-        return;
-      }
-  
-      const [currentKey, ...rest] = remainingPath;
-  
-      if (Array.isArray(current)) {
-        current.forEach(item => traverse(item, remainingPath));
-      } else {
-        if (currentKey in current) {
-          traverse(current[currentKey], rest);
-        }
-        // Also check other branches for the same path
-        Object.values(current).forEach(value => {
-          if (typeof value === 'object' && value !== null) {
-            traverse(value, remainingPath);
-          }
-        });
-      }
-    };
-  
-    traverse(obj, path.split('.'));
-    return values;
-  };
-  
-  /**
-   * Extract data from a JSON object using a root key and collect nested values
-   * @param data - The JSON data to process
-   * @param rootKey - The path to the root of the data
-   * @param nestedPaths - Array of paths to collect from each child of root
-   * @returns Processed data array or null if extraction fails
-   */
-  export const extractDataByRootKey = (
-    data: any,
-    rootKey?: string,
-    nestedPaths: string[] = []
-  ): any[] | null => {
-    if (!data) return null;
-    
-    try {
-      // Get the root node
-      const rootNode = rootKey ? getNestedValue(data, rootKey) : data;
-      if (!rootNode) return null;
-  
-      // If root is not an object, wrap in array
-      if (typeof rootNode !== 'object') {
-        return [{ value: rootNode }];
-      }
-  
-      // Get immediate children of root
-      const children = Array.isArray(rootNode) ? rootNode : Object.entries(rootNode);
-  
-      // Process each child
-      return children.map((child: any) => {
-        const childNode = Array.isArray(rootNode) ? child : child[1];
-        const childKey = Array.isArray(rootNode) ? null : child[0];
-  
-        // Start with basic node info
-        const result: Record<string, any> = {
-          key: childKey,
-          ...childNode
-        };
-  
-        // Collect values from specified nested paths
-        nestedPaths.forEach(path => {
-          const values = collectDescendantValues(childNode, path);
-          if (values.length > 0) {
-            result[path] = values;
-          }
-        });
-  
-        return result;
-      });
-    } catch (error) {
-      console.error('Error extracting data by root key:', error);
+function findFirstArray(data: any): any[] | null {
+  if (!data || typeof data !== 'object') return null;
+  if (Array.isArray(data)) return data;
+
+  for (const key in data) {
+    if (Array.isArray(data[key])) return data[key];
+    const nestedArray = findFirstArray(data[key]);
+    if (nestedArray) return nestedArray;
+  }
+
+  return null;
+}
+
+/**
+ * Find an array by key name in an object
+ */
+function findArrayByKey(data: any, keyPath: string): any[] | null {
+  if (!data || typeof data !== 'object') return null;
+  if (!keyPath) return null;
+
+  const keys = keyPath.split('.');
+  let current = data;
+
+  for (const key of keys) {
+    if (!current || typeof current !== 'object' || !(key in current)) {
       return null;
     }
-  };
+    current = current[key];
+  }
+
+  return Array.isArray(current) ? current : null;
+}
+
+
+/**
+ * Find a value by key name in an object or its nested objects
+ */
+function findValueByKey(obj: any, key: string): any {
+  if (!obj || typeof obj !== 'object') return undefined;
   
-  /**
-   * Transforms raw data into a format suitable for visualization
-   * @param data - The raw data array
-   * @param parameters - The parameters to extract
-   * @returns Transformed data array for visualization
-   */
-  export const transformDataForVisualization = (
-    data: any[],
-    parameters: string[]
-  ): Record<string, any>[] => {
-    if (!data || !Array.isArray(data)) return [];
-    
-    return data.map((item: any, index: number) => {
-      const dataPoint: Record<string, any> = { id: index };
-      
-      // If no parameters provided, use all primitive keys
-      if (!parameters || parameters.length === 0) {
-        if (typeof item === 'object' && item !== null) {
-          Object.entries(item).forEach(([key, value]) => {
-            if (typeof value !== 'object' || value === null) {
-              dataPoint[key] = value;
-            }
-          });
-        } else {
-          dataPoint.value = item;
-        }
-      } else {
-        // Extract values based on provided parameters
-        parameters.forEach(param => {
-          const value = getNestedValue(item, param);
-          // Use the last part of the parameter path as the key
-          const key = param.split('.').pop() || param;
-          dataPoint[key] = value;
-        });
-      }
-      
-      return dataPoint;
-    });
-  };
-  
-  /**
-   * Validates if the data is suitable for visualization
-   * @param data - The data to validate
-   * @param graphType - The type of graph to validate for
-   * @param parameters - The parameters to check
-   * @returns Error message or null if valid
-   */
-  export const validateDataForVisualization = (
-    data: any[],
-    graphType: string,
-    parameters: string[]
-  ): string | null => {
-    if (!data || data.length === 0) {
-      return "No data available to display";
-    }
-    
-    // Check if we have the minimum required parameters for each graph type
-    switch (graphType) {
-      case 'pie':
-      case 'bar':
-        if (parameters.length < 2) {
-          return `${graphType} chart requires at least 2 parameters (label and value)`;
-        }
-        break;
-      case 'line':
-        if (parameters.length < 2) {
-          return "Line chart requires at least 2 parameters (x and y values)";
-        }
-        break;
-      case 'scatter':
-        if (parameters.length < 2) {
-          return "Scatter plot requires at least 2 parameters (x and y coordinates)";
-        }
-        break;
-    }
-    
-    // Verify that the data has the required parameters
-    const missingParams = [];
-    for (const param of parameters) {
-      const paramKey = param.split('.').pop() || param;
-      if (!data.some(item => paramKey in item)) {
-        missingParams.push(paramKey);
+  // Direct property match
+  if (obj.hasOwnProperty(key)) {    
+    return obj[key];
+  }
+
+  // Search in nested objects
+  for (const k in obj) {   
+    if (typeof obj[k] === 'object') {
+      const value = findValueByKey(obj[k], key);      
+      if (value !== undefined) {                
+        return value;
       }
     }
-    
-    if (missingParams.length > 0) {
-      return `Data is missing required parameter(s): ${missingParams.join(', ')}`;
-    }
-    
-    return null;
-  };
+  }
+
+  return undefined;
+}
+
+/**
+ * Validate data for visualization
+ */
+export function validateDataForVisualization(
+  data: Record<string, any>[], 
+  graphType: string, 
+  parameters: string[]
+): string | null {
+  if (!data?.length) return "No data available for visualization";
+  if (!parameters?.length) return "No parameters selected for visualization";
+  
+  const requiredParams = graphType === 'pie' ? 2 : 2;
+  if (parameters.length < requiredParams) {
+    return `${graphType} charts require at least ${requiredParams} parameters`;
+  }
+
+  return null;
+}
+
+/**
+ * Normalize root keys
+ */
+export function normalizeRootKeys(rootKeys: string[]): string[] {
+  return rootKeys?.filter(Boolean) || [];
+}

@@ -16,17 +16,42 @@ const BarGraph: React.FC<BarGraphProps> = ({ data, sizeX, sizeY, parameters }) =
 
   // Use the first parameter for labels and the second for values
   const [labelParam, valueParam] = parameters;
-  const labelKey = labelParam?.split('.').pop() || '';
-  const valueKey = valueParam?.split('.').pop() || '';
+  
+  // Extract root key path and actual parameter name
+  const labelParts = labelParam?.split('.') || [];
+  const valueParts = valueParam?.split('.') || [];
+  
+  // Get the actual parameter names (last part of the path)
+  const labelKey = labelParts[labelParts.length - 1] || '';
+  const valueKey = valueParts[valueParts.length - 1] || '';
 
-  // Format data for the chart
-  const chartData = data.map((item, index) => ({
-    name: typeof item[labelKey] === 'string' ? 
-      item[labelKey].substring(0, 20) : // Truncate long labels
-      String(item[labelKey] || `Item ${index}`),
-    value: Number(item[valueKey]) || 0,
-    color: COLORS[index % COLORS.length]
-  }));
+  // Format data for the chart, handling data from different root keys
+  const chartData = data.map((item, index) => {
+    // For label, check in the current item and all nested objects
+    const findValue = (obj: any, key: string): any => {
+      if (!obj) return undefined;
+      if (key in obj) return obj[key];
+      
+      for (const prop in obj) {
+        if (typeof obj[prop] === 'object') {
+          const found = findValue(obj[prop], key);
+          if (found !== undefined) return found;
+        }
+      }
+      return undefined;
+    };
+
+    const label = findValue(item, labelKey);
+    const value = findValue(item, valueKey);
+
+    return {
+      name: typeof label === 'string' ? 
+        label.substring(0, 20) : // Truncate long labels
+        String(label || `Item ${index}`),
+      value: Number(value) || 0,
+      color: COLORS[index % COLORS.length]
+    };
+  });
 
   // Calculate max value for Y axis padding
   const maxValue = Math.max(...chartData.map(item => item.value));

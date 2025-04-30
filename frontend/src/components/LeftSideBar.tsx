@@ -16,7 +16,7 @@ import {
   FaTrash,
   FaShoppingCart
 } from 'react-icons/fa';
-import { DashboardType } from '../../utils/types';
+import { DashboardType } from '@/../utils/types';
 import DashboardShop from './DashboardShop';
 
 interface DeleteConfirmationProps {
@@ -68,6 +68,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
   const [errorFetchingDashboards, setErrorFetchingDashboards] = useState<string | null>(null);
   const [dashboardToDelete, setDashboardToDelete] = useState<DashboardType | null>(null);
   const [isShopOpen, setShopOpen] = useState(false);
+  const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE;  //contant for the baseURL
 
   // Fetch dashboards
   useEffect(() => {
@@ -86,7 +87,7 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
       }
 
       try {
-        const response = await fetch(`http://localhost:8000/api/go/dashboards/user/${userId}`);
+        const response = await fetch(`${BASE_URL}/api/go/dashboards/user/${userId}`);
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
@@ -328,6 +329,13 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
                   >
                     <FaPlus className="text-sm mr-2 flex-shrink-0" />
                     <span className="text-sm whitespace-nowrap">Create New Dashboard</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                  className="flex items-center w-full p-2 rounded-lg hover:bg-pink-700 cursor-pointer text-pink-200 hover:text-white transition-colors focus:outline-none focus:ring-1 focus:ring-pink-400"
+                  >
+
                   </button>
                 </li>
               </ul>

@@ -11,6 +11,7 @@ const DashboardPage = () => {
   const [dashboardTitle, setDashboardTitle] = useState('Loading...');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [refreshDashboard, setRefreshDashboard] = useState(false);
+  const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE;  //contant for the baseURL
 
   useEffect(() => {
     const session = getUserSession();
@@ -28,7 +29,7 @@ const DashboardPage = () => {
 
   const fetchDashboardDetails = async (dashboardId: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
+      const response = await fetch(`${BASE_URL}/api/go/dashboards/${dashboardId}`);
       if (response.ok) {
         const data = await response.json();
         setDashboardTitle(data.name || `Dashboard #${dashboardId}`);
@@ -54,7 +55,7 @@ const DashboardPage = () => {
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">{dashboardTitle}</h1>
-          <APIFormDialog onFormSubmit={handleFormSubmit} />
+          <APIFormDialog onFormSubmit={handleFormSubmit}  editMode={false}/>
         </div>
         <div className="bg-white shadow-lg rounded-lg p-0">
           <Dashboard refresh={refreshDashboard} />

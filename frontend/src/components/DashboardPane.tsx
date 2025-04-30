@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { CiCircleMinus } from "react-icons/ci";
-import { HelpCircle } from "lucide-react";
+import { MdModeEdit } from "react-icons/md";
 import PieGraph from './GraphTypes/PieGraph';
 import LineGraph from './GraphTypes/LineGraph';
 import ScatterPlot from './GraphTypes/ScatterPlot';
 import BarGraph from './GraphTypes/BarGraph';
-import { extractDataByRootKey, transformDataForVisualization, validateDataForVisualization } from '@/../utils/dataUtils';
+import { 
+  transformDataForVisualization, 
+  validateDataForVisualization,
+  normalizeRootKeys
+} from '@/../utils/dataUtils';
+import APIFormDialog from './APIFormDialog';
 
 interface DashboardPaneProps {
   index: number;
@@ -13,9 +18,9 @@ interface DashboardPaneProps {
   sizeY: number;
   queryString: string;
   graphType: string;
-  parameters?: string[];
+  parameters: (string | { parameter: string })[];
   apiData: any;
-  rootKey: string;
+  rootKeys: string[];
   apiName?: string;
   onDelete?: (id: number) => void;
 }
@@ -28,18 +33,20 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
   graphType, 
   parameters = [],
   apiData,
-  rootKey,
+  rootKeys = [],
   apiName,
   onDelete
 }) => {
   const [data, setData] = useState<Record<string, any>[] | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [stringParams, setStringParams] = useState<string[]>([]);
+  const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE;
 
-  // Update dimensions when container size changes
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
@@ -48,64 +55,53 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       }
     };
 
-    // Initial dimensions
     updateDimensions();
-
-    // Update dimensions on resize
     const resizeObserver = new ResizeObserver(updateDimensions);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
 
-    // Update on window resize as well
     window.addEventListener('resize', updateDimensions);
-
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateDimensions);
     };
   }, []);
 
-  // Process the API data or fetch from queryString
   useEffect(() => {
     const processApiData = async () => {
       try {
         setLoading(true);
         let jsonData = apiData;
 
-        // If no apiData provided but we have a queryString, fetch the data
         if (!jsonData && queryString) {
-          try {
-            const response = await fetch(queryString);
-            if (!response.ok) {
-              throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            jsonData = await response.json();
-          } catch (fetchError) {
-            throw new Error(`Failed to fetch data: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
+          const response = await fetch(queryString);
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
           }
+          jsonData = await response.json();
         }
 
-        // If still no data, show error
         if (!jsonData) {
           throw new Error("No data source provided");
         }
 
-        // Extract data based on root key
-        const extractedData = extractDataByRootKey(jsonData, rootKey);
-        if (!extractedData) {
-          throw new Error(`Failed to extract data using root key: ${rootKey}`);
+        const normalizedParams = parameters.map(p => 
+          typeof p === 'string' ? p : p.parameter
+        );
+        setStringParams(normalizedParams);
+      
+        const transformedData = transformDataForVisualization(jsonData, normalizedParams, rootKeys);        
+
+        if (!transformedData?.length) {
+          throw new Error("Failed to transform data for visualization");
         }
 
-        // Transform data for visualization
-        const transformedData = transformDataForVisualization(extractedData, parameters);
-        
-        // Validate data for the specific graph type
-        const validationError = validateDataForVisualization(transformedData, graphType, parameters);
-        if (validationError) {
-          throw new Error(validationError);
+        const validationError = validateDataForVisualization(transformedData, graphType, normalizedParams);
+        if (validationError) {          
+          throw new Error(validationError);          
         }
-
+ 
         setData(transformedData);
         setError(null);
       } catch (error) {
@@ -118,9 +114,10 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
 
     processApiData();
-  }, [apiData, queryString, rootKey, parameters, graphType]);
+  }, [apiData, queryString, parameters, graphType]);
 
-  // Handle delete button click
+  const handleFormSubmit = () => setIsDialogOpen(false);
+
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -128,11 +125,8 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     if (!onDelete || isDeleting) return;
 
     setIsDeleting(true);
-    console.log(`Attempting to delete pane with index: ${index}`);
-
     try {
-      // First try to delete from backend
-      const response = await fetch(`http://localhost:8000/api/go/deleteAPI/${index}`, {
+      const response = await fetch(`${BASE_URL}/api/go/deleteAPI/${index}`, {
         method: 'DELETE',
       });
       
@@ -140,9 +134,6 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
         throw new Error(`Error deleting API: ${response.statusText}`);
       }
       
-      console.log(`Successfully deleted API ${index} from backend`);
-      
-      // If backend delete successful, update frontend
       onDelete(index);
     } catch (error) {
       console.error('Failed to delete API:', error);
@@ -152,10 +143,17 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     }
   };
 
-  // Generate title based on parameters and graph type
+  const getParameterName = (param: string | { parameter: string }): string => {
+    if (typeof param === 'string') return param;
+    return param.parameter;
+  };
+
   const getVisTitle = () => {
     if (parameters && parameters.length >= 2) {
-      const displayParams = parameters.map(p => p.split('.').pop()).filter(Boolean);
+      const displayParams = parameters.map(param => {
+        const paramStr = getParameterName(param);
+        return paramStr.split('.').pop() || '';
+      });
       return `${displayParams[0]} vs ${displayParams[1]}`;
     }
     return apiName || 'Data Visualization';
@@ -166,7 +164,19 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
       ref={containerRef}
       className="pane relative w-full h-full border border-gray-300 bg-white p-4 rounded-lg shadow overflow-hidden group transition-all hover:shadow-md"
     >
-      {/* Delete button with explicit styling to ensure visibility */}
+      <span className="absolute top-2 right-10 z-50 bg-blue-500 hover:bg-blue-700 text-white rounded-full p-1 transition-all opacity-0 group-hover:opacity-100">
+        <button onClick={() => setIsDialogOpen(true)}>
+          <MdModeEdit size={20} />
+        </button>
+      </span>
+
+      {isDialogOpen && (
+        <APIFormDialog 
+          onFormSubmit={handleFormSubmit} 
+          editMode={true} 
+        />
+      )}
+      
       {onDelete && (
         <button 
           className={`btn-delete absolute top-2 right-2 z-50 ${
@@ -180,10 +190,12 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
         </button>
       )}
       
-      {/* Main content */}
       <div className="w-full h-full flex flex-col">
-        {/* Title based on parameters or default */}
-        <div className="mb-3 text-lg font-semibold text-gray-700">
+        <div className="mb-3 text-lg font-bold text-gray-700"> 
+          {apiName}
+        </div>
+        
+        <div className="mb-3 text-md font-semibold text-gray-700">
           {getVisTitle()}
         </div>
       
@@ -203,28 +215,28 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={parameters} 
               />
             ) : graphType === "line" ? (
               <LineGraph 
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={stringParams} 
               />
             ) : graphType === "scatter" ? (
               <ScatterPlot 
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={stringParams} 
               />
             ) : graphType === "bar" ? (
               <BarGraph 
                 data={data} 
                 sizeX={dimensions.width - 32} 
                 sizeY={dimensions.height - 70} 
-                parameters={parameters || []} 
+                parameters={stringParams} 
               />
             ) : (
               <div className="text-center text-gray-700">

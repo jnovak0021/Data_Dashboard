@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { IoChevronDown, IoChevronForward } from 'react-icons/io5';
+import { IoChevronDown, IoChevronForward, IoClose } from 'react-icons/io5';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
-import { IoClose } from 'react-icons/io5';
 
 type DataNode = {
   key: string;
+  fullPath: string;
   value: any;
   type: string;
   depth: number;
@@ -15,29 +15,30 @@ type DataNode = {
 interface APIPreviewModalProps {
   apiUrl: string;
   isOpen: boolean;
-  initialRootKey?: string;
+  initialRootKeys?: string[];
   initialSelectedParams?: string[];
   onSelectedParameters: (parameters: string[]) => void;
-  onRootKeySelected: (rootKey: string) => void;
+  onRootKeysSelected: (rootKeys: string[]) => void;
   onClose: () => void;
 }
 
 export function APIPreview({ 
   apiUrl, 
   isOpen, 
-  initialRootKey = '', 
+  initialRootKeys = [], 
   initialSelectedParams = [], 
   onClose, 
   onSelectedParameters, 
-  onRootKeySelected 
+  onRootKeysSelected 
 }: APIPreviewModalProps) {
   const [structure, setStructure] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set(initialSelectedParams));
-  const [rootKey, setRootKey] = useState<string>(initialRootKey);
+  const [rootKeys, setRootKeys] = useState<string[]>(initialRootKeys);
   const [isSelectingRoot, setIsSelectingRoot] = useState(false);
+  const [rawJson, setRawJson] = useState<any>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -61,6 +62,7 @@ export function APIPreview({
       }
 
       const json = await response.json();
+      setRawJson(json);
 
       const extractStructure = (obj: any): any => {
         if (Array.isArray(obj)) {
@@ -76,32 +78,33 @@ export function APIPreview({
       const structureOnly = extractStructure(json);
       setStructure(structureOnly);
       
-      // Only set default root key if none was provided
-      if (!initialRootKey) {
+      if (initialRootKeys.length === 0) {
         if (Array.isArray(json)) {
-          setRootKey('root');
-          onRootKeySelected('root');
+          const rootKey = 'root';
+          setRootKeys([rootKey]);
+          onRootKeysSelected([rootKey]);
         } else if (structureOnly && typeof structureOnly === 'object' && Object.keys(structureOnly).length > 0) {
           const topLevelKey = Object.keys(structureOnly)[0];
-          setRootKey(topLevelKey);
-          onRootKeySelected(topLevelKey);
+          setRootKeys([topLevelKey]);
+          onRootKeysSelected([topLevelKey]);
         }
       }
     } catch (err) {
-      setError('Failed to fetch structure');
+      setError('Failed to fetch or parse API response');
+      console.error('API Preview error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const parseDataStructure = (obj: any, parentKey = '', depth = 0): DataNode[] => {
+  const parseDataStructure = (obj: any, parentPath = '', depth = 0): DataNode[] => {
     if (!obj || typeof obj !== 'object') return [];
 
-    // Handle array at root level
     if (depth === 0 && Array.isArray(obj)) {
       return [
         {
           key: 'root',
+          fullPath: 'root',
           value: obj,
           type: 'array',
           depth: 0,
@@ -111,12 +114,13 @@ export function APIPreview({
     }
 
     return Object.entries(obj).map(([key, value], index, arr) => {
-      const fullKey = parentKey ? `${parentKey}.${key}` : key;
+      const fullPath = parentPath ? `${parentPath}.${key}` : key;
       const type = Array.isArray(value) ? 'array' : typeof value;
       const isLastChild = index === arr.length - 1;
 
       const node: DataNode = {
-        key: fullKey,
+        key,
+        fullPath,
         value,
         type,
         depth,
@@ -125,53 +129,59 @@ export function APIPreview({
       };
 
       if (value !== null && typeof value === 'object') {
-        node.children = parseDataStructure(value, fullKey, depth + 1);
+        node.children = parseDataStructure(value, fullPath, depth + 1);
       }
 
       return node;
     });
   };
 
+  const getRootKeyForPath = (path: string): string | undefined => {
+    return rootKeys.find(rootKey => path === rootKey || path.startsWith(rootKey + '.'));
+  };
+
   const getRelativePath = (fullPath: string): string => {
-    if (!rootKey || !fullPath.startsWith(rootKey)) return fullPath;
-    const relativePath = fullPath.slice(rootKey.length);
-    return relativePath.startsWith('.') ? relativePath.slice(1) : relativePath;
+    const rootKey = getRootKeyForPath(fullPath);
+    if (rootKey) {
+      if (fullPath === rootKey) return '';
+      return fullPath.slice(rootKey.length + 1);
+    }
+    return fullPath;
   };
 
-  const flattenNodes = (nodes: DataNode[]): DataNode[] => {
-    return nodes.reduce((acc: DataNode[], node) => {
-      acc.push(node);
-      if (node.children && node.children.length > 0) {
-        acc.push(...flattenNodes(node.children));
-      }
-      return acc;
-    }, []);
-  };
-
-  const toggleNode = (key: string) => {
+  const toggleNode = (fullPath: string) => {
     setExpandedNodes((prev) => {
       const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
+      if (next.has(fullPath)) {
+        next.delete(fullPath);
       } else {
-        next.add(key);
+        next.add(fullPath);
       }
       return next;
     });
   };
 
+  const toggleRootKey = (node: DataNode) => {
+    setRootKeys((prev) => {
+      const exists = prev.includes(node.fullPath);
+      const updated = exists
+        ? prev.filter(rk => rk !== node.fullPath)
+        : [...prev, node.fullPath];
+      onRootKeysSelected(updated);
+      return updated;
+    });
+  };
+
   const handleNodeClick = (node: DataNode) => {
     if (isSelectingRoot) {
-      setRootKey(node.key);
-      onRootKeySelected(node.key);
-      setIsSelectingRoot(false);
+      toggleRootKey(node);
     } else {
       setSelectedNodes((prev) => {
         const next = new Set(prev);
-        if (next.has(node.key)) {
-          next.delete(node.key);
+        if (next.has(node.fullPath)) {
+          next.delete(node.fullPath);
         } else {
-          next.add(node.key);
+          next.add(node.fullPath);
         }
         return next;
       });
@@ -179,17 +189,30 @@ export function APIPreview({
   };
 
   const handleSave = () => {
-    const flatNodes = flattenNodes(parseDataStructure(structure));
-    const selectedParameters = Array.from(selectedNodes)
-      .map(key => getRelativePath(key))
-      .filter(Boolean);
-
-    onSelectedParameters(selectedParameters);
+    onSelectedParameters(Array.from(selectedNodes));
+    onRootKeysSelected(rootKeys);
     onClose();
   };
 
+  const SelectRoot = () => (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsSelectingRoot(!isSelectingRoot);
+      }}
+      className={`px-4 py-2 rounded-md transition-colors ${
+        isSelectingRoot 
+          ? 'bg-orange-600 text-white hover:bg-orange-700' 
+          : 'bg-gray-700 text-white hover:bg-gray-600'
+      }`}
+    >
+      {isSelectingRoot ? 'Selecting Root Keys...' : 'Select Root Keys'}
+    </button>
+  );
+
   const ExpandCollapseButton = ({ node }: { node: DataNode }) => {
-    const isExpanded = expandedNodes.has(node.key);
+    const isExpanded = expandedNodes.has(node.fullPath);
     if (!node.children?.length) return null;
 
     return (
@@ -197,7 +220,7 @@ export function APIPreview({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          toggleNode(node.key);
+          toggleNode(node.fullPath);
         }}
         className="p-1 hover:bg-gray-600 rounded mr-1 flex items-center justify-center"
       >
@@ -207,9 +230,8 @@ export function APIPreview({
   };
 
   const NodeContent = ({ node }: { node: DataNode }) => {
-    const isSelected = selectedNodes.has(node.key);
-    const isRootKey = rootKey === node.key;
-    const displayKey = node.key.split('.').pop();
+    const isSelected = selectedNodes.has(node.fullPath);
+    const isRootKey = rootKeys.includes(node.fullPath);
     const hasChildren = node.children && node.children.length > 0;
 
     return (
@@ -223,20 +245,25 @@ export function APIPreview({
           handleNodeClick(node);
         }}
       >
-        <span className="font-medium">{displayKey}</span>
+        <span className="font-medium">{node.key}</span>
         <span className="mx-1">:</span>
-        <span className={hasChildren ? 'italic text-gray-400' : 'text-gray-500'}>
-          {hasChildren ? `(${node.type})` : 'null'}
+        <span className={`${hasChildren ? 'italic text-gray-400' : 'text-gray-500'} ${node.type === 'array' ? 'text-blue-400' : node.type === 'object' ? 'text-green-400' : 'text-yellow-400'}`}>
+          {hasChildren ? `(${node.type})` : node.type}
         </span>
+        {node.depth > 1 && (
+          <span className="ml-2 text-xs text-gray-500 opacity-60">
+            {node.fullPath}
+          </span>
+        )}
       </div>
     );
   };
 
   const renderNode = (node: DataNode) => {
-    const isExpanded = expandedNodes.has(node.key);
+    const isExpanded = expandedNodes.has(node.fullPath);
 
     return (
-      <div key={node.key} className="relative">
+      <div key={node.fullPath} className="relative">
         <div
           className="flex items-start"
           style={{ paddingLeft: `${node.depth * 1.5}rem` }}
@@ -256,7 +283,7 @@ export function APIPreview({
     );
   };
 
-  const renderSelectedNodes = (dataStructure: DataNode[]) => {
+  const renderSelectedNodes = () => {
     if (selectedNodes.size === 0) {
       return (
         <div className="italic px-4 py-3 bg-gray-800 rounded border border-gray-700">
@@ -265,32 +292,70 @@ export function APIPreview({
       );
     }
 
-    const flatNodes = flattenNodes(dataStructure);
-    const selectedElements = Array.from(selectedNodes)
-      .map(key => getRelativePath(key))
-      .filter(Boolean)
-      .join(', ');
-    
     return (
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 font-mono">
-        {selectedElements}
+        {Array.from(selectedNodes).map((path, index) => {
+          const rootKey = getRootKeyForPath(path);
+          const relPath = getRelativePath(path);
+          const displayPath = rootKey ? `${rootKey}.${relPath}` : path;
+
+          return (
+            <div key={path} className="flex items-center justify-between gap-2 mb-1 last:mb-0">
+              <div className="flex items-center gap-2">
+                <span className="text-yellow-500">{index + 1}.</span>
+                <span className="text-white">{displayPath}</span>
+                <span className="text-gray-500 text-xs">(full: {path})</span>
+              </div>
+              <button 
+                onClick={() => {
+                  setSelectedNodes(prev => {
+                    const next = new Set(prev);
+                    next.delete(path);
+                    return next;
+                  });
+                }}
+                className="text-red-400 hover:text-red-300"
+              >
+                <IoClose size={16} />
+              </button>
+            </div>
+          );
+        })}
       </div>
     );
   };
 
-  const renderRootKey = () => {
-    if (!rootKey) {
+  const renderRootKeys = () => {
+    if (rootKeys.length === 0) {
       return (
         <div className="italic px-4 py-3 bg-gray-800 rounded border border-gray-700">
-          No root key selected
+          No root keys selected
         </div>
       );
     }
-    
+
     return (
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 font-mono">
-        <span className="text-orange-400 mr-2">Root Key:</span>
-        {rootKey}
+        <span className="text-orange-400 mr-2">Root Keys:</span>
+        {rootKeys.map((rootKey, index) => (
+          <div key={`${rootKey}-${index}`} className="flex items-center gap-2 mt-1 first:mt-0">
+            <span className="text-yellow-500">{index + 1}.</span>
+            <div className="flex flex-col">
+              <span className="text-white">{rootKey.split('.').pop()}</span>
+              <span className="text-gray-500 text-xs">Path: {rootKey}</span>
+            </div>
+            <button 
+              onClick={() => {
+                const updated = rootKeys.filter((_, i) => i !== index);
+                setRootKeys(updated);
+                onRootKeysSelected(updated);
+              }}
+              className="text-red-400 hover:text-red-300 ml-auto"
+            >
+              <IoClose size={16} />
+            </button>
+          </div>
+        ))}
       </div>
     );
   };
@@ -299,15 +364,14 @@ export function APIPreview({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+     <div className="bg-gray-900 rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <h1 className="text-lg font-semibold text-white">API Preview</h1>
-            <div className="text-sm px-2 py-1 bg-gray-800 rounded font-mono text-gray-300">
+            <div className="text-sm px-2 py-1 bg-gray-800 rounded font-mono text-gray-300 truncate max-w-[400px]">
               {apiUrl}
             </div>
           </div>
-
         </div>
         
         <div className="overflow-y-auto max-h-[calc(90vh-4rem)]">
@@ -316,55 +380,56 @@ export function APIPreview({
               <AiOutlineLoading3Quarters className="w-8 h-8 animate-spin text-orange-500" />
             </div>
           ) : error ? (
-            <>
-              <div className="text-red-500 text-center py-12">{error}</div>
+            <div className="p-6">
+              <div className="text-red-500 text-center py-6">{error}</div>
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center gap-2 mx-auto"
               >
                 <IoClose className="w-5 h-5" />
                 Close
               </button>
-            </>
+            </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 divide-x divide-gray-700">
               <div className="p-4">
                 <div className="font-mono text-sm bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
                   <div className="mb-2 px-3 py-2 bg-gray-800 text-xs">
                     {isSelectingRoot ? (
-                      <span className="text-orange-400">Click an element to set as root key</span>
+                      <span className="text-orange-400">Click elements to select root keys (multiple allowed)</span>
                     ) : (
-                      'Click elements to select parameters'
+                      <span className="text-blue-400">Click elements to select parameters for visualization</span>
                     )}
                   </div>
-                  {parseDataStructure(structure).map((node) => renderNode(node))}
+                  <div className="max-h-[60vh] overflow-y-auto p-2">
+                    {parseDataStructure(structure).map((node) => renderNode(node))}
+                  </div>
                 </div>
               </div>
               <div className="p-4 space-y-4">
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-400">SELECTED ROOT KEY</h3>
-                  {renderRootKey()}
+                  <h3 className="text-sm font-semibold text-gray-400">SELECTED ROOT KEYS</h3>
+                  {renderRootKeys()}
+                  <div className="text-xs text-gray-500 italic">
+                    Root keys define the starting points for data extraction.
+                    Select multiple root keys to combine data from different parts of the JSON.
+                  </div>
                 </div>
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-gray-400">SELECTED PARAMETERS</h3>
-                  {renderSelectedNodes(parseDataStructure(structure))}
+                  {renderSelectedNodes()}
+                  <div className="text-xs text-gray-500 italic">
+                    Parameters are the specific data points you want to visualize.
+                    Full paths are used internally to avoid name collisions between different roots.
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    onClick={() => setIsSelectingRoot(true)}
-                    className={`px-4 py-2 rounded-md transition-colors ${
-                      isSelectingRoot 
-                        ? 'bg-orange-600 text-white hover:bg-orange-700' 
-                        : 'bg-gray-700 text-white hover:bg-gray-600'
-                    }`}
-                  >
-                    {isSelectingRoot ? 'Selecting Root Key...' : 'Select Root Key'}
-                  </button>
+                  <SelectRoot />
                   <button
                     onClick={handleSave}
                     className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors"
                   >
-                    Save
+                    Save Selections
                   </button>
                   <button
                     onClick={onClose}

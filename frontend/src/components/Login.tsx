@@ -8,13 +8,14 @@ export default function Login({ setIsLoggedIn, setUser }: { setIsLoggedIn: React
    const [isCreatingAccount, setIsCreatingAccount] = useState(false); // Toggle between login & sign-up
    const [accountCreated, setAccountCreated] = useState(false); // Track if account creation is successful
    const [errorMessage, setErrorMessage] = useState(""); // Error message state
+   const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_BASE;  //contant for the baseURL
 
    const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
       console.log("Login attempt with email:", email); // Debugging
 
       try {
-         const response = await fetch("http://localhost:8000/api/go/login", {
+         const response = await fetch(`${BASE_URL}/api/go/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),
@@ -63,7 +64,7 @@ export default function Login({ setIsLoggedIn, setUser }: { setIsLoggedIn: React
       }
 
       try {
-         const response = await fetch("http://localhost:8000/api/go/users", {
+         const response = await fetch(`${BASE_URL}/api/go/users`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, email, password }),
