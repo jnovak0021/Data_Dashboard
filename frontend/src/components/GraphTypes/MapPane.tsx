@@ -7,14 +7,30 @@ mapboxgl.accessToken = "pk.eyJ1IjoiY3dpbHNvbjAwMjMiLCJhIjoiY21hNDluNXoxMDJ0cDJqb
 
 interface MapPaneProps {
   markerDataUrl?: string;
+  rootKeys?: string[];
   initialCoordinates?: [number, number];
   initialZoom?: number;
   className?: string;
   onDelete?: () => void;
 }
 
+const extractDataByRootKeys = (data: any, rootKeys: string[]): any[] => {
+  let current = data;
+  for (const key of rootKeys) {
+    if (typeof current === 'object' && current !== null && key in current) {
+      current = current[key];
+    } else if (Array.isArray(current)) {
+      current = current.map(item => item[key]).flat();
+    } else {
+      return [];
+    }
+  }
+  return Array.isArray(current) ? current : [];
+};
+
 const MapPane: React.FC<MapPaneProps> = ({
   markerDataUrl,
+  rootKeys = [],
   initialCoordinates = [0, 0],
   initialZoom = 2,
   className = "",
@@ -41,7 +57,15 @@ const MapPane: React.FC<MapPaneProps> = ({
     map.on('style.load', () => {
       map.setPaintProperty('background', 'background-color', 'rgba(0, 0, 0, 0)');
       setMapInitialized(true);
-      setTimeout(() => map.resize(), 100);
+      setTimeout(() => {
+        if (map && map.getContainer()) {
+          try {
+            map.resize();
+          } catch (err) {
+            console.warn("Map resize failed:", err);
+          }
+        }
+      }, 100);
     });
 
     mapInstance.current = map;
@@ -54,15 +78,17 @@ const MapPane: React.FC<MapPaneProps> = ({
       const response = await fetch(markerDataUrl);
       if (!response.ok) throw new Error(`Failed to fetch marker data: ${response.statusText}`);
 
-      const jsonData = await response.json();
-      if (!Array.isArray(jsonData)) {
-        console.error("Expected JSON array");
+      const rawData = await response.json();
+      const records = rootKeys.length > 0 ? extractDataByRootKeys(rawData, rootKeys) : rawData;
+
+      if (!Array.isArray(records)) {
+        console.error("Expected array after root key extraction");
         return;
       }
 
       const map = mapInstance.current;
 
-      jsonData.forEach((item) => {
+      records.forEach((item) => {
         const lng = item.Longitude ?? item.longitude ?? item.lng;
         const lat = item.Latitude ?? item.latitude ?? item.lat;
         const value = item.Value ?? item.value ?? item.val;
@@ -84,7 +110,7 @@ const MapPane: React.FC<MapPaneProps> = ({
     } catch (error) {
       console.error("Error loading marker data:", error);
     }
-  }, [markerDataUrl]);
+  }, [markerDataUrl, rootKeys]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
