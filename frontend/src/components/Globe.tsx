@@ -9,7 +9,7 @@ const Globe: React.FC = () => {
 
    useEffect(() => {
       if (mapContainerRef.current && !mapRef.current) {
-         mapboxgl.accessToken = "pk.eyJ1IjoiY3dpbHNvbjAwMjMiLCJhIjoiY205eXlpbnUzMW8wdjJqcHZpZ2RnamhwcyJ9.r5-grC6pZa0oSWVYvABYWw";
+         mapboxgl.accessToken = "pk.eyJ1IjoiY3dpbHNvbjAwMjMiLCJhIjoiY21hNDluNXoxMDJ0cDJqb28wYndtaHo5ayJ9.NTF-BW2mPhVsGNujBeYPoA";
 
          const map = new mapboxgl.Map({
             container: mapContainerRef.current,

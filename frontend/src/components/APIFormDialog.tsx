@@ -295,6 +295,7 @@ export default function APIFormDialog({ onFormSubmit }: APIFormDialogProps) {
                 <option className="bg-background text-white" value="bar">Bar</option>
                 <option className="bg-background text-white" value="pie">Pie</option>
                 <option className="bg-background text-white" value="scatter">Scatter</option>
+                <option className="bg-background text-white" value="map">Map</option>
               </select>
               <FormToolTip content="Choose the type of graph you want to use to visualize the API data." />
             </div>

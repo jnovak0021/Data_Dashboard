@@ -5,7 +5,8 @@ import DashboardPane from './DashboardPane';
 import { fetchUserId } from '../../utils/auth';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import MapPane from './MapPane';
+import MapPane from './GraphTypes/MapPane';
+
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -46,8 +47,9 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   const [userId, setUserId] = useState(0);
   const [layouts, setLayouts] = useState<{ [key: string]: Layout[] }>({ lg: [], md: [], sm: [], xs: [] });
   const [forceRefresh, setForceRefresh] = useState(false);
+  // Add state for marker data URL if needed
+  const [markerDataUrl, setMarkerDataUrl] = useState<string | undefined>(undefined);
 
-  // Fetch APIs function
   const fetchAPIs = useCallback(async () => {
     if (!dashboardId) return;
 
@@ -62,60 +64,54 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
       const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}`);
       if (response.ok) {
         const dashboardData = await response.json();
-        const apiList = dashboardData.panes || [];
+        let apiList: APIData[] = dashboardData.panes || [];
+
+        // Check if map pane already exists
+        const hasMapPane = apiList.some(api => api.graphType === 'map');
+        
         setApis(apiList);
-
-        if (!apiList.length) {
-          console.warn('No API panes found.');
-        }
-
         generateInitialLayout(apiList);
-      } else {
-        console.warn('Dashboard not found, rendering fallback layout.');
+        
+        // Optional: Check if dashboard has marker data and set it
+        if (dashboardData.markerDataUrl) {
+          setMarkerDataUrl(dashboardData.markerDataUrl);
+        }
       }
     } catch (err) {
       console.error('Error fetching dashboard APIs:', err);
     }
   }, [dashboardId]);
 
-  // Initial fetch
   useEffect(() => {
     fetchAPIs();
   }, [fetchAPIs, refresh, forceRefresh]);
 
-  // Listen for dashboard update events
   useEffect(() => {
     const handleDashboardUpdate = () => {
-      console.log("Dashboard update event received, refreshing data...");
-      setForceRefresh(prev => !prev); // Toggle to force re-render
+      setForceRefresh(prev => !prev);
     };
-
     window.addEventListener('dashboard-update', handleDashboardUpdate);
-    
-    return () => {
-      window.removeEventListener('dashboard-update', handleDashboardUpdate);
-    };
+    return () => window.removeEventListener('dashboard-update', handleDashboardUpdate);
   }, []);
 
   useEffect(() => {
     const fetchAllApiData = async () => {
-      if (apis.length > 0) {
-        const results = await Promise.all(apis.map(async (api) => {
-          try {
-            const response = await fetch(api.apiString);
-            if (response.ok) {
-              const data = await response.json();
-              return { apiId: api.apiId, data };
-            } else {
-              throw new Error('API fetch failed');
-            }
-          } catch (err) {
-            console.error(`Failed fetching data for API ${api.apiId}`, err);
-            return { apiId: api.apiId, data: null };
+      const results = await Promise.all(apis.map(async (api) => {
+        if (api.graphType === 'map') return { apiId: api.apiId, data: null };
+        try {
+          const response = await fetch(api.apiString);
+          if (response.ok) {
+            const data = await response.json();
+            return { apiId: api.apiId, data };
+          } else {
+            throw new Error('API fetch failed');
           }
-        }));
-        setApiData(results);
-      }
+        } catch (err) {
+          console.error(`Failed fetching data for API ${api.apiId}`, err);
+          return { apiId: api.apiId, data: null };
+        }
+      }));
+      setApiData(results);
     };
 
     fetchAllApiData();
@@ -129,7 +125,30 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   }, [layouts, dashboardId]);
 
   const generateInitialLayout = (apiList: APIData[]) => {
-    const makeLayout = (breakpoint: string) => {
+    if (!dashboardId) return;
+    
+    // Try to load saved layout from localStorage first
+    const layoutKey = `dashboardLayout_${dashboardId}`;
+    const savedLayout = localStorage.getItem(layoutKey);
+    
+    if (savedLayout) {
+      try {
+        const parsedLayout = JSON.parse(savedLayout);
+        
+        // Check if saved layout contains all current APIs
+        const allApisInLayout = apiList.every(api => 
+          parsedLayout.lg.some((item: Layout) => item.i === `${api.apiId}`));
+          
+        if (allApisInLayout) {
+          setLayouts(parsedLayout);
+          return;
+        }
+      } catch (e) {
+        console.warn('Error parsing saved layout, generating new one', e);
+      }
+    }
+    
+    const makeLayout = () => {
       return apiList.map((api, index) => ({
         i: `${api.apiId}`,
         x: (index % 3) * 3,
@@ -138,15 +157,12 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         h: Math.max(Math.ceil(api.paneY / 100), 3),
         minW: 2,
         minH: 2,
+        isResizable: api.graphType !== 'map' // 👈 only maps are locked
       }));
     };
 
-    setLayouts({
-      lg: makeLayout('lg'),
-      md: makeLayout('md'),
-      sm: makeLayout('sm'),
-      xs: makeLayout('xs'),
-    });
+    const layout = makeLayout();
+    setLayouts({ lg: layout, md: layout, sm: layout, xs: layout });
   };
 
   const onLayoutChange = (_: Layout[], allLayouts: { [key: string]: Layout[] }) => {
@@ -154,26 +170,16 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
   };
 
   const handleDeletePane = async (apiId: number) => {
-    if (!confirm('Are you sure you want to delete this pane? This action cannot be undone.')) return;
+    if (apiId === -1) return alert('Map pane cannot be deleted.');
+    if (!confirm('Are you sure you want to delete this pane?')) return;
 
     try {
-      if (dashboardId) {
-        const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes/${apiId}`, {
-          method: 'DELETE',
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to delete pane: ${response.statusText}`);
-        }
-        
-        console.log(`Pane ${apiId} deleted successfully`);
-      }
-      
-      // Update local state to reflect the deletion
+      const response = await fetch(`http://localhost:8000/api/go/dashboards/${dashboardId}/panes/${apiId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error(`Failed to delete pane: ${response.statusText}`);
       setApis(prev => prev.filter(api => api.apiId !== apiId));
       setApiData(prev => prev.filter(data => data.apiId !== apiId));
-      
-      // Update layouts
       setLayouts(prev => {
         const newLayouts = { ...prev };
         Object.keys(newLayouts).forEach(key => {
@@ -181,13 +187,10 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         });
         return newLayouts;
       });
-      
-      // Force refresh the entire dashboard
       fetchAPIs();
-      
-    } catch (error) {
-      console.error('Error deleting pane:', error);
-      alert('Failed to delete pane. Please try again.');
+    } catch (err) {
+      console.error('Error deleting pane:', err);
+      alert('Failed to delete pane.');
     }
   };
 
@@ -206,17 +209,23 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
         margin={[20, 20]}
         containerPadding={[20, 20]}
       >
-        {/* MapPane always for dashboard 1 */}
-        {dashboardId === '1' && (
-          <div key="map-pane" className="dashboard-pane-container" data-grid={{ x: 0, y: 0, w: 6, h: 6, minW: 4, minH: 4 }}>
-            <div className="pane relative w-full h-full border border-blue-400 bg-white p-4 rounded-lg shadow overflow-hidden">
-              <div className="mb-3 text-lg font-semibold text-gray-700">Map View</div>
-              <MapPane />
-            </div>
-          </div>
-        )}
-
         {apis.map((api) => {
+          if (api.graphType === 'map') {
+            return (
+              <div key={`${api.apiId}`} data-grid={{ x: 0, y: 0, w: 6, h: 6, minW: 4, minH: 4 }}>
+                <div className="pane relative w-full h-full border border-blue-400 bg-white p-4 rounded-lg shadow overflow-hidden">
+                  <div className="mb-3 text-lg font-semibold text-gray-700">Map View</div>
+                  <MapPane
+                    markerDataUrl={api.apiString} // 👈 This must point to your API
+                    initialCoordinates={[0, 0]}
+                    initialZoom={2}
+                    onDelete={() => handleDeletePane(api.apiId)}
+                  />
+                </div>
+              </div>
+            );
+          }
+
           const apiSpecificData = apiData.find(d => d.apiId === api.apiId)?.data;
           return (
             <div key={`${api.apiId}`} className="dashboard-pane-container">
