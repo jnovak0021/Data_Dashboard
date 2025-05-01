@@ -41,61 +41,64 @@ export function APIPreview({
   const [rawJson, setRawJson] = useState<any>(null);
 
   useEffect(() => {
+
+    const fetchStructure = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await fetch(apiUrl);
+        const contentType = response.headers.get('content-type');
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Response is not valid JSON');
+        }
+
+        const json = await response.json();
+        setRawJson(json);
+
+        const extractStructure = (obj: any): any => {
+          if (Array.isArray(obj)) {
+            return obj.length > 0 ? [extractStructure(obj[0])] : [];
+          } else if (typeof obj === 'object' && obj !== null) {
+            return Object.fromEntries(
+              Object.entries(obj).map(([key, value]) => [key, extractStructure(value)])
+            );
+          }
+          return null;
+        };
+
+        const structureOnly = extractStructure(json);
+        setStructure(structureOnly);
+        
+        if (initialRootKeys.length === 0) {
+          if (Array.isArray(json)) {
+            const rootKey = 'root';
+            setRootKeys([rootKey]);
+            onRootKeysSelected([rootKey]);
+          } else if (structureOnly && typeof structureOnly === 'object' && Object.keys(structureOnly).length > 0) {
+            const topLevelKey = Object.keys(structureOnly)[0];
+            setRootKeys([topLevelKey]);
+            onRootKeysSelected([topLevelKey]);
+          }
+        }
+      } catch (err) {
+        setError('Failed to fetch or parse API response');
+        console.error('API Preview error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+
     if (isOpen) {
       fetchStructure();
     }
-  }, [isOpen, apiUrl]);
+  }, [isOpen, apiUrl, initialRootKeys.length, onRootKeysSelected]);
 
-  const fetchStructure = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(apiUrl);
-      const contentType = response.headers.get('content-type');
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Response is not valid JSON');
-      }
-
-      const json = await response.json();
-      setRawJson(json);
-
-      const extractStructure = (obj: any): any => {
-        if (Array.isArray(obj)) {
-          return obj.length > 0 ? [extractStructure(obj[0])] : [];
-        } else if (typeof obj === 'object' && obj !== null) {
-          return Object.fromEntries(
-            Object.entries(obj).map(([key, value]) => [key, extractStructure(value)])
-          );
-        }
-        return null;
-      };
-
-      const structureOnly = extractStructure(json);
-      setStructure(structureOnly);
-      
-      if (initialRootKeys.length === 0) {
-        if (Array.isArray(json)) {
-          const rootKey = 'root';
-          setRootKeys([rootKey]);
-          onRootKeysSelected([rootKey]);
-        } else if (structureOnly && typeof structureOnly === 'object' && Object.keys(structureOnly).length > 0) {
-          const topLevelKey = Object.keys(structureOnly)[0];
-          setRootKeys([topLevelKey]);
-          onRootKeysSelected([topLevelKey]);
-        }
-      }
-    } catch (err) {
-      setError('Failed to fetch or parse API response');
-      console.error('API Preview error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const parseDataStructure = (obj: any, parentPath = '', depth = 0): DataNode[] => {
     if (!obj || typeof obj !== 'object') return [];
