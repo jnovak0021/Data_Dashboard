@@ -37,10 +37,6 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
-  if (!refresh) {
-    return null; // Ensure a valid ReactNode is returned when refresh is false
-  }
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [apis, setApis] = useState<APIData[]>([]);
@@ -92,7 +88,7 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
     } finally {
       setLoading(false);
     }
-  }, [dashboardId, layouts.lg.length]);
+  }, [dashboardId, layouts.lg.length, BASE_URL]);
 
   useEffect(() => {
     fetchAPIs();
@@ -177,6 +173,10 @@ const Dashboard: React.FC<DashboardProps> = ({ refresh }) => {
       console.error('Error deleting pane:', error);
     }
   };
+  
+  if (!refresh) {
+    return null; // Ensure a valid ReactNode is returned when refresh is false
+  }
 
   if (loading) {
     return <div>Loading...</div>;
