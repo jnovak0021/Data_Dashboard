@@ -1,6 +1,6 @@
 // components/LeftSidebar.tsx
-import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router'; 
+import { useCallback, useState, useEffect } from 'react';
 import { useDashboard } from '../../utils/dashboard-context';
 import { fetchUserId } from '../../utils/auth';
 import {
@@ -110,17 +110,20 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({ userEmail, onLogout }) => {
     };
 
     fetchDashboards();
-  }, [refreshFlag, setSelectedDashboard]);
+  }, [BASE_URL, refreshFlag, selectedDashboard, setSelectedDashboard]);
 
+  
+  const handleRoute = useCallback((path: string) => {
+    router.push(path);
+  }, [router]);
+  
   useEffect(() => {
     if (selectedDashboard) {
       handleRoute(`/dashboard/${selectedDashboard.id}`);
     }
-  }, [selectedDashboard]);
+  }, [handleRoute, selectedDashboard]);
 
-  const handleRoute = (path: string) => {
-    router.push(path);
-  };
+
 
   const handleDashboardSelect = (dashboard: DashboardType) => {
     setSelectedDashboard(dashboard);

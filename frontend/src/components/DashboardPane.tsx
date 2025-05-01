@@ -114,7 +114,7 @@ const DashboardPane: React.FC<DashboardPaneProps> = ({
     };
 
     processApiData();
-  }, [apiData, queryString, parameters, graphType]);
+  }, [apiData, queryString, rootKeys, parameters, graphType]);
 
   const handleFormSubmit = () => setIsDialogOpen(false);
 

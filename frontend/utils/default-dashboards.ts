@@ -4,7 +4,8 @@ export const FinanceDashboard: DashboardType = {
     id: 0,
     name: "Finance",
     apis: [
-        {   apiId: 12323,
+        {   
+            apiId: 12323,
             userId: 123,
             apiName: "sdas",
             apiString: "sdas",
@@ -12,7 +13,8 @@ export const FinanceDashboard: DashboardType = {
             graphType: "Line",
             paneX: 123,
             paneY: 123,
-            parameters: null
+            parameters: [],
+            rootKeys: []
         }        
     ]
 };
@@ -29,7 +31,8 @@ export const CyberDashboard: DashboardType = {
             graphType: "Line",
             paneX: 123,
             paneY: 123,
-            parameters: null
+            parameters: [],
+            rootKeys: []
         }        
     ]
 };
@@ -46,7 +49,8 @@ export const GeoDashboard: DashboardType = {
             graphType: "Line",
             paneX: 123,
             paneY: 123,
-            parameters: null
+            parameters: [],
+            rootKeys: []            
         }        
     ]
 };

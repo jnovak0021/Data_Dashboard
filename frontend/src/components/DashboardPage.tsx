@@ -22,25 +22,26 @@ const DashboardPage = () => {
       return;
     }
 
+    const fetchDashboardDetails = async (dashboardId: string) => {
+      try {
+        const response = await fetch(`${BASE_URL}/api/go/dashboards/${dashboardId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setDashboardTitle(data.name || `Dashboard #${dashboardId}`);
+        } else {
+          setDashboardTitle(`Dashboard #${dashboardId}`);
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard details:", error);
+        setDashboardTitle(`Dashboard #${dashboardId}`);
+      }
+    };
+    
     if (id) {
       fetchDashboardDetails(id.toString());
     }
-  }, [id, router]);
+  }, [BASE_URL, id, router]);
 
-  const fetchDashboardDetails = async (dashboardId: string) => {
-    try {
-      const response = await fetch(`${BASE_URL}/api/go/dashboards/${dashboardId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setDashboardTitle(data.name || `Dashboard #${dashboardId}`);
-      } else {
-        setDashboardTitle(`Dashboard #${dashboardId}`);
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard details:", error);
-      setDashboardTitle(`Dashboard #${dashboardId}`);
-    }
-  };
 
   const handleLogout = () => {
     router.push('/');

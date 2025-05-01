@@ -5,8 +5,8 @@ export interface DashboardType {
 };
 
 export interface APIData {
-    id?: number;
-    userId: string;
+    apiId?: number;
+    userId: number;
     apiName: string;
     apiString: string;
     apiKey?: string;
